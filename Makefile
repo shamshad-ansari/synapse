@@ -1,5 +1,7 @@
 .PHONY: help up down logs ps migrate-up migrate-down fmt lint test
 
+.DEFAULT_GOAL := help
+
 help:
 	@echo "Synapse Dev Commands"
 	@echo ""
