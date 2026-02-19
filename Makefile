@@ -1,6 +1,12 @@
-.PHONY: help up down logs ps migrate-up migrate-down fmt lint test
+.PHONY: help up down logs ps migrate-up migrate-down fmt lint test check-db-url
 
 .DEFAULT_GOAL := help
+
+# Optionally load .env if present (won't error if missing)
+-include .env
+export
+
+DB_URL ?= $(DATABASE_URL)
 
 help:
 	@echo "Synapse Dev Commands"
@@ -32,12 +38,17 @@ logs:
 ps:
 	docker compose ps
 
-# NOTE: These will be wired in Phase 0 Step 2 once the DB container and migrate tool are set up.
-migrate-up:
-	@echo "TODO: wire migrations in Phase 0 Step 2"
+check-db-url:
+	@if [ -z "$(DB_URL)" ]; then \
+		echo "ERROR: DB_URL is empty. Set DATABASE_URL (or create .env with DATABASE_URL=...)"; \
+		exit 1; \
+	fi
 
-migrate-down:
-	@echo "TODO: wire migrations in Phase 0 Step 2"
+migrate-up: check-db-url
+	docker compose run --rm migrate -path=/migrations -database "$(DB_URL)" up
+
+migrate-down: check-db-url
+	docker compose run --rm migrate -path=/migrations -database "$(DB_URL)" down 1
 
 fmt:
 	@echo "TODO: add gofmt + frontend formatting in Phase 0 Step 3/4"
