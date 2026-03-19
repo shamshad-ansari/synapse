@@ -17,6 +17,7 @@ bin/
 # Env
 .env
 .env.*
+!.env.example
 
 # IDE
 .vscode/
@@ -24,3 +25,6 @@ bin/
 
 # Misc
 tmp/
+
+# Local scripts (not for repo)
+scripts/commit-progressive.sh
