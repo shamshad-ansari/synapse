@@ -12,8 +12,10 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
-	"github.com/shamshad-ansari/synapse/api-gateway/internal/config"
-	router "github.com/shamshad-ansari/synapse/api-gateway/internal/transport/http"
+	"github.com/shamshad-ansari/synapse/services/api-gateway/internal/config"
+	"github.com/shamshad-ansari/synapse/services/api-gateway/internal/repository"
+	"github.com/shamshad-ansari/synapse/services/api-gateway/internal/service"
+	router "github.com/shamshad-ansari/synapse/services/api-gateway/internal/transport/http"
 )
 
 func main() {
@@ -59,7 +61,10 @@ func main() {
 	redisClient := redis.NewClient(redisOpts)
 	defer redisClient.Close()
 
-	r := router.NewRouter(&cfg, pool, logger)
+	userRepo := repository.NewPostgresUserRepo(pool)
+	authSvc := service.NewAuthService(userRepo, &cfg)
+
+	r := router.NewRouter(&cfg, pool, logger, authSvc)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.HTTPPort,

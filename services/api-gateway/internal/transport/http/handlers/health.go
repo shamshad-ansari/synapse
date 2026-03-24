@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/shamshad-ansari/synapse/api-gateway/internal/transport/respond"
+	"github.com/shamshad-ansari/synapse/services/api-gateway/internal/transport/respond"
 )
 
 type HealthHandler struct {
