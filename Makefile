@@ -26,8 +26,11 @@ help:
 	@echo "  make lint         - lint code"
 	@echo "  make test         - run tests"
 
+rebuild:
+	docker compose up -d --build
+
 up:
-	docker compose up -d
+	docker compose up -d 
 
 down:
 	docker compose down
