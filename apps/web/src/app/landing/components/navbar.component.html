@@ -1,0 +1,29 @@
+<nav class="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-4 bg-white/80 backdrop-blur-md border-b border-gray-100"
+     [class.scrolled]="isScrolled()">
+  <a routerLink="/" class="flex items-center gap-2 text-[#0F172A] hover:opacity-80 transition-opacity">
+    <img [src]="logoImage" alt="Synapse Logo" class="w-8 h-8 object-contain" />
+    <span class="font-['Bricolage_Grotesque'] font-semibold text-xl tracking-tight">Synapse</span>
+  </a>
+
+  <div class="hidden md:flex items-center gap-8 font-['Inter'] text-sm font-medium text-gray-500">
+    <a href="#features" class="hover:text-[#0F172A] transition-colors">Features</a>
+    <a href="#pricing" class="hover:text-[#0F172A] transition-colors">Pricing</a>
+    <a href="#about" class="hover:text-[#0F172A] transition-colors">About</a>
+  </div>
+
+  <div class="flex items-center gap-4">
+    @if (isAuthenticated()) {
+      <a routerLink="/today"
+         class="inline-flex items-center justify-center h-9 px-5 bg-[#102E67] text-white rounded-full font-['Inter'] font-medium text-sm transition-colors hover:bg-[#1a3f80]">
+        Go to app &rarr;
+      </a>
+    } @else {
+      <a routerLink="/login" class="font-['Inter'] text-sm font-medium text-gray-600 hover:text-[#0F172A] transition-colors hidden sm:block">
+        Log in
+      </a>
+      <a routerLink="/register">
+        <app-landing-button size="sm">Register</app-landing-button>
+      </a>
+    }
+  </div>
+</nav>

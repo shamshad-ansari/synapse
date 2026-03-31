@@ -1,0 +1,52 @@
+<footer class="py-16 bg-[#F9FAFB] border-t border-gray-100 font-['Inter']">
+  <div class="container px-6 mx-auto max-w-7xl">
+    <div class="grid grid-cols-2 gap-8 md:grid-cols-4 lg:grid-cols-5 text-sm">
+
+      <div class="col-span-2 lg:col-span-2">
+        <a routerLink="/" class="flex items-center gap-2 mb-6 text-[#0F172A] hover:opacity-80 transition-opacity w-fit">
+          <img [src]="logoImage" alt="Synapse Logo" class="w-8 h-8 object-contain" />
+          <span class="font-['Bricolage_Grotesque'] font-semibold text-xl tracking-tight">Synapse</span>
+        </a>
+        <p class="mb-6 text-gray-500 max-w-xs">
+          The network-aware learning intelligence platform that optimizes what you study and who you learn from.
+        </p>
+        <div class="flex items-center gap-4 text-gray-400">
+          <a href="#" class="hover:text-[#0F172A] transition-colors"><lucide-icon [img]="Twitter" [size]="20" [strokeWidth]="1.5"></lucide-icon></a>
+          <a href="#" class="hover:text-[#0F172A] transition-colors"><lucide-icon [img]="Linkedin" [size]="20" [strokeWidth]="1.5"></lucide-icon></a>
+          <a href="#" class="hover:text-[#0F172A] transition-colors"><lucide-icon [img]="Github" [size]="20" [strokeWidth]="1.5"></lucide-icon></a>
+        </div>
+      </div>
+
+      <div>
+        <h4 class="font-semibold text-[#0F172A] mb-4">Product</h4>
+        <ul class="space-y-3 text-gray-500">
+          <li><a href="#features" class="hover:text-[#0F172A] transition-colors">Features</a></li>
+          <li><a href="#pricing" class="hover:text-[#0F172A] transition-colors">Pricing</a></li>
+          <li><a href="#" class="hover:text-[#0F172A] transition-colors">Integrations</a></li>
+          <li><a href="#" class="hover:text-[#0F172A] transition-colors">FAQ</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h4 class="font-semibold text-[#0F172A] mb-4">Account</h4>
+        <ul class="space-y-3 text-gray-500">
+          <li><a routerLink="/login" class="hover:text-[#0F172A] transition-colors">Log in</a></li>
+          <li><a routerLink="/register" class="hover:text-[#0F172A] transition-colors">Get started</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h4 class="font-semibold text-[#0F172A] mb-4">Company</h4>
+        <ul class="space-y-3 text-gray-500">
+          <li><a href="#" class="hover:text-[#0F172A] transition-colors">Privacy Policy</a></li>
+          <li><a href="#" class="hover:text-[#0F172A] transition-colors">Terms of Service</a></li>
+        </ul>
+      </div>
+
+    </div>
+
+    <div class="pt-8 mt-16 text-center text-gray-400 text-xs border-t border-gray-200">
+      &copy; {{ currentYear }} Synapse. Built for students.
+    </div>
+  </div>
+</footer>
