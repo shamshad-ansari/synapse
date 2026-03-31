@@ -60,7 +60,41 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "8080:8080"
+       - "8080:8080"
+
+  lms-service:
+    build:
+      context: .
+      dockerfile: services/lms-service/Dockerfile
+    container_name: synapse-lms-service
+    environment:
+      APP_ENV: "${APP_ENV:-dev}"
+      HTTP_PORT: "8081"
+      DATABASE_URL: "${DATABASE_URL:?set DATABASE_URL in .env}"
+      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET in .env}"
+      CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-http://localhost:4200}"
+      REDIS_URL: "${REDIS_URL:-redis://redis:6379}"
+      CANVAS_CLIENT_ID: "${CANVAS_CLIENT_ID:-dev_client_id}"
+      CANVAS_CLIENT_SECRET: "${CANVAS_CLIENT_SECRET:-dev_secret}"
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env}"
+      FRONTEND_URL: "${FRONTEND_URL:-http://localhost:4200}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+
+  mock-canvas:
+    build:
+      context: .
+      dockerfile: services/mock-canvas/Dockerfile
+    container_name: synapse-mock-canvas
+    environment:
+      HTTP_PORT: "8082"
+    ports:
+      - "8082:8082"
 
 volumes:
   synapse_pg_data:
