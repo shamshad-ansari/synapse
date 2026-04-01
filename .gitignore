@@ -26,5 +26,10 @@ bin/
 # Misc
 tmp/
 
+scripts/
+
+.cursorrules
+
 # Local scripts (not for repo)
 scripts/commit-progressive.sh
+scripts/commit-frontend-auth.sh

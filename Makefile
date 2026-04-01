@@ -1,4 +1,4 @@
-.PHONY: help up down logs ps migrate-up migrate-down fmt lint test check-db-url
+.PHONY: help up down logs ps migrate-up migrate-down seed-alex-history fmt lint test check-db-url
 
 .DEFAULT_GOAL := help
 
@@ -20,6 +20,7 @@ help:
 	@echo "DB:"
 	@echo "  make migrate-up   - apply db migrations"
 	@echo "  make migrate-down - rollback db migrations"
+	@echo "  make seed-alex-history - backfill historical learning data for alex@mit.edu"
 	@echo ""
 	@echo "Quality:"
 	@echo "  make fmt          - format code (go fmt + frontend fmt)"
@@ -52,6 +53,9 @@ migrate-up: check-db-url
 
 migrate-down: check-db-url
 	docker compose run --rm migrate -path=/migrations -database "$(DB_URL)" down 1
+
+seed-alex-history:
+	./scripts/seed-alex-history.sh
 
 fmt:
 	@echo "TODO: add gofmt + frontend formatting in Phase 0 Step 3/4"
