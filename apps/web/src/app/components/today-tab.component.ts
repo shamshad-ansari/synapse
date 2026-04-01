@@ -1,27 +1,18 @@
 import {
   Component,
   ElementRef,
+  ChangeDetectionStrategy,
+  OnInit,
   afterNextRender,
+  computed,
+  effect,
   inject,
   viewChild,
 } from '@angular/core';
 import { Router } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
-
-interface ActionItem {
-  icon: string;
-  title: string;
-  reason: string;
-  duration: string;
-  buttonText: string;
-  route: string;
-}
-
-interface WeakTopic {
-  name: string;
-  mastery: number;
-  bars: number[];
-}
+import { AuthService } from '../core/auth/auth.service';
+import { TodayService, type Contract } from '../features/today/today.service';
 
 interface PeerInfo {
   avatar: string;
@@ -31,18 +22,24 @@ interface PeerInfo {
   bgColor: string;
 }
 
-interface StatInfo {
-  value: string;
-  label: string;
-  color: string;
-}
 
 @Component({
   selector: 'app-today-tab',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [LucideAngularModule],
   template: `
-    <div class="flex flex-col overflow-y-auto overflow-x-hidden" style="padding: 44px 56px 56px; gap: 36px">
+    <div
+      class="flex flex-col overflow-y-auto overflow-x-hidden"
+      [style.padding]="todayService.loading() ? '0' : '44px 56px 56px'"
+      style="gap: 36px"
+    >
+      @if (todayService.loading()) {
+        <div style="padding: 44px 56px">
+          <div class="skeleton" style="height: 32px; width: 280px; border-radius: var(--r-md); margin-bottom: 12px"></div>
+          <div class="skeleton" style="height: 16px; width: 200px; border-radius: var(--r-md)"></div>
+        </div>
+      } @else {
 
       <!-- SVG Gradient Definitions - Synapse Navy to Emerald -->
       <svg style="position: absolute; width: 0; height: 0">
@@ -58,10 +55,10 @@ interface StatInfo {
       <div class="flex items-center justify-between gap-4">
         <div>
           <div style="font-size: 26px; font-weight: 700; letter-spacing: -0.6px; font-family: var(--font-display); color: var(--ink)">
-            Good afternoon, Alex
+            Good {{ timeOfDay }}, {{ userFirstName() }}
           </div>
           <div style="font-size: 13.5px; color: var(--ink-muted); margin-top: 4px">
-            Tuesday · Feb 24 · Here's what matters right now
+            {{ todayDateStr }} · Here's what matters right now
           </div>
         </div>
         <div class="flex items-center gap-2.5">
@@ -86,6 +83,7 @@ interface StatInfo {
       </div>
 
       <!-- Contract Banner -->
+      @if (todayService.contract(); as c) {
       <div
         class="contract-banner relative flex items-center gap-8 overflow-hidden"
         style="border: 1px solid #EAEAEA; border-radius: var(--r-xl); padding: 32px 36px; background: #FFFFFF; box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05); transition: border-color var(--transition-base), box-shadow var(--transition-base)"
@@ -95,17 +93,23 @@ interface StatInfo {
             Active Contract
           </div>
           <div style="font-size: 22px; font-weight: 700; letter-spacing: -0.5px; font-family: var(--font-display); color: var(--ink)">
-            CS225 · Discrete Mathematics
+            {{ c.course_name }}
           </div>
           <div class="flex items-center gap-4 mt-3" style="font-size: 13px; color: var(--ink-muted)">
             <div class="flex items-center gap-1.5">
-              <lucide-icon name="calendar" [size]="14" [strokeWidth]="2" style="color: var(--navy)" /> Exam · Mar 12 <span style="color: var(--ink-faint); margin-left: 4px">16 days</span>
+              <lucide-icon name="calendar" [size]="14" [strokeWidth]="2" style="color: var(--navy)" /> Exam · {{ c.exam_date }} <span style="color: var(--ink-faint); margin-left: 4px">{{ c.days_until }} days</span>
             </div>
             <div class="flex items-center gap-1.5">
               <lucide-icon name="clock" [size]="14" [strokeWidth]="2" style="color: var(--navy)" /> 45 min budget today
             </div>
-            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full" style="font-size: 11.5px; font-weight: 600; background: var(--emerald-light); color: var(--emerald); border: 1px solid var(--emerald-border)">
-              <div style="width: 5px; height: 5px; border-radius: 50%; background: currentColor"></div> On Track
+            <span
+              class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+              [style.background]="contractStatusPillBg(c)"
+              [style.color]="contractStatusPillFg(c)"
+              [style.border]="'1px solid ' + contractStatusPillBorder(c)"
+              style="font-size: 11.5px; font-weight: 600"
+            >
+              <div style="width: 5px; height: 5px; border-radius: 50%; background: currentColor"></div> {{ contractStatusLabel(c) }}
             </span>
           </div>
         </div>
@@ -114,12 +118,12 @@ interface StatInfo {
             Week Budget
           </div>
           <div class="flex justify-between" style="font-size: 12.5px; color: var(--ink-muted); margin-bottom: 8px">
-            <strong style="color: var(--ink); font-family: var(--font-display)">4.5h</strong> done <span style="color: var(--ink-faint); margin-left: 4px">/ 8h target</span>
+            <strong style="color: var(--ink); font-family: var(--font-display)">{{ c.hours_done }}h</strong> done <span style="color: var(--ink-faint); margin-left: 4px">/ {{ c.weekly_hours_budget }}h target</span>
           </div>
           <div style="height: 6px; background: var(--surface-sub); border-radius: 6px; width: 160px; overflow: hidden; border: 1px solid var(--divider)">
             <div
-              class="progress-fill"
               style="height: 100%; background: var(--emerald); border-radius: 5px"
+              [style.width.%]="weekProgressPercent(c)"
             ></div>
           </div>
         </div>
@@ -132,7 +136,7 @@ interface StatInfo {
             class="absolute inset-0 flex items-center justify-center"
             style="font-size: 16px; font-weight: 800; font-family: var(--font-display); color: var(--ink)"
           >
-            73%
+            {{ c.readiness }}%
           </div>
         </div>
         <div style="flex-shrink: 0">
@@ -145,6 +149,7 @@ interface StatInfo {
           </div>
         </div>
       </div>
+      }
 
       <!-- Main Content Layout -->
       <div class="flex gap-12 flex-1 min-h-0">
@@ -165,7 +170,7 @@ interface StatInfo {
               </div>
             </div>
             <div class="flex flex-col gap-3">
-              @for (action of actions; track $index) {
+              @for (action of todayService.actions(); track $index) {
                 <div
                   class="action-card relative flex items-center gap-4 cursor-pointer overflow-hidden"
                   style="padding: 18px 22px; border-radius: var(--r-xl); border: 1px solid #EAEAEA; background: #FFFFFF; box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05); transition: all var(--transition-base)"
@@ -206,7 +211,7 @@ interface StatInfo {
                 <div style="font-size: 11.5px; color: var(--ink-faint); font-family: var(--mono)">3 flagged</div>
                 <div class="ml-auto cursor-pointer" style="font-size: 13px; color: var(--navy); font-weight: 600">View all →</div>
               </div>
-              @for (topic of weakTopics; track topic.name) {
+              @for (topic of todayService.weakTopics(); track topic.name) {
                 <div
                   class="weak-topic-card flex items-center gap-4 cursor-pointer"
                   style="padding: 14px 16px; border-radius: var(--r-lg); border: 1px solid #EAEAEA; background: #FFFFFF; box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05); transition: all var(--transition-base); margin-bottom: 8px"
@@ -329,7 +334,7 @@ interface StatInfo {
               <div style="font-size: 15px; font-weight: 700; font-family: var(--font-display); color: var(--ink)">This Week</div>
             </div>
             <div class="flex gap-3 mb-3">
-              @for (stat of statsRow1; track $index) {
+              @for (stat of statsRow1(); track $index) {
                 <div class="flex-1" style="padding: 16px; border-radius: var(--r-lg); border: 1px solid #EAEAEA; background: #FFFFFF; box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05)">
                   <div [style.color]="stat.color" style="font-size: 20px; font-weight: 800; font-family: var(--font-display); margin-bottom: 4px">{{ stat.value }}</div>
                   <div style="font-size: 10.5px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600">{{ stat.label }}</div>
@@ -337,7 +342,7 @@ interface StatInfo {
               }
             </div>
             <div class="flex gap-3">
-              @for (stat of statsRow2; track $index) {
+              @for (stat of statsRow2(); track $index) {
                 <div class="flex-1" style="padding: 16px; border-radius: var(--r-lg); border: 1px solid #EAEAEA; background: #FFFFFF; box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05)">
                   <div [style.color]="stat.color" style="font-size: 20px; font-weight: 800; font-family: var(--font-display); margin-bottom: 4px">{{ stat.value }}</div>
                   <div style="font-size: 10.5px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600">{{ stat.label }}</div>
@@ -364,15 +369,16 @@ interface StatInfo {
           </div>
 
           <!-- Deadline Alert -->
+          @if (todayService.deadlineAlert(); as d) {
           <div style="padding: 20px 22px; border-radius: var(--r-xl); background: var(--red-light); border: 1px solid var(--red-border); box-shadow: var(--shadow-sm)">
             <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--red); font-weight: 700; margin-bottom: 8px">
               Deadline Alert
             </div>
             <div style="font-size: 16px; font-weight: 700; font-family: var(--font-display); color: var(--ink); margin-bottom: 5px">
-              Problem Set 3
+              {{ d.title }}
             </div>
             <div style="font-size: 12.5px; color: var(--ink-muted)">
-              Due in <strong style="color: var(--red); font-family: var(--font-display)">2 days</strong> · Covers Induction + Recursion
+              Due in <strong style="color: var(--red); font-family: var(--font-display)">{{ d.days }} days</strong> · {{ d.course }}
             </div>
             <button
               class="deadline-btn w-full flex items-center justify-center transition-all"
@@ -382,8 +388,10 @@ interface StatInfo {
               View in Planner
             </button>
           </div>
+          }
         </div>
       </div>
+      }
     </div>
   `,
   styles: [`
@@ -526,38 +534,42 @@ interface StatInfo {
       border-color: var(--navy) !important;
       color: var(--navy) !important;
     }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .skeleton {
+      background: var(--surface-sub);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
   `],
 })
-export default class TodayTabComponent {
+export default class TodayTabComponent implements OnInit {
   private readonly router = inject(Router);
+  protected readonly todayService = inject(TodayService);
+  protected readonly authService = inject(AuthService);
   readonly ringRef = viewChild<ElementRef<SVGCircleElement>>('ring');
 
-  readonly actions: ActionItem[] = [
-    { icon: 'clock', title: 'Review 12 due cards', reason: '8 cards overdue · forgetting risk rising on Induction', duration: '~14 min', buttonText: 'Start Review', route: '/review' },
-    { icon: 'book-open', title: 'Relearn "Induction step" section', reason: 'Confusion hotspot · 3 confused marks in last session', duration: '~8 min', buttonText: 'Open Section', route: '/notes' },
-    { icon: 'users', title: 'Request tutor on Recursion base cases', reason: 'Confusion plateau detected · 2 peers available now', duration: '~15 min', buttonText: 'Find Tutors', route: '/tutoring' },
-  ];
+  protected readonly todayDateStr = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
 
-  readonly weakTopics: WeakTopic[] = [
-    { name: 'Recursion', mastery: 29, bars: [45, 32, 29, 25, 20] },
-    { name: 'Induction', mastery: 51, bars: [62, 55, 51, 48, 45] },
-    { name: 'Set Theory', mastery: 78, bars: [88, 82, 78, 76, 74] },
-  ];
+  private readonly statsWithDue = computed(() =>
+    this.todayService.stats().map((s) =>
+      s.label === 'Due' ? { ...s, value: `${this.todayService.dueCardCount()} Due` } : s,
+    ),
+  );
+
+  readonly statsRow1 = computed(() => this.statsWithDue().slice(0, 2));
+  readonly statsRow2 = computed(() => this.statsWithDue().slice(2, 4));
 
   readonly peers: PeerInfo[] = [
     { avatar: 'JL', name: 'Jamie Liu', subject: 'Recursion · 94% mastery', rating: '4.9', bgColor: 'var(--navy)' },
     { avatar: 'SK', name: 'Sam Kato', subject: 'Algorithms · 88% mastery', rating: '4.7', bgColor: 'var(--emerald)' },
     { avatar: 'MR', name: 'Maya Roth', subject: 'Logic · 91% mastery', rating: '4.8', bgColor: 'var(--purple)' },
-  ];
-
-  readonly statsRow1: StatInfo[] = [
-    { value: '47', label: 'Cards done', color: 'var(--navy)' },
-    { value: '3.2h', label: 'Study time', color: 'var(--navy)' },
-  ];
-
-  readonly statsRow2: StatInfo[] = [
-    { value: '82%', label: 'Accuracy', color: 'var(--emerald)' },
-    { value: '3', label: 'Day streak', color: 'var(--emerald)' },
   ];
 
   readonly streakDays: (boolean | string)[] = [true, true, true, false, true, false, 'today'];
@@ -568,19 +580,99 @@ export default class TodayTabComponent {
 
   constructor() {
     afterNextRender(() => {
-      const ring = this.ringRef();
-      if (ring) {
-        const el = ring.nativeElement;
-        const circ = 2 * Math.PI * 27;
-        el.style.strokeDasharray = String(circ);
-        el.style.strokeDashoffset = String(circ);
+      this.applyReadinessRing(this.todayService.contract()?.readiness ?? 73);
+    });
+    effect(() => {
+      const pct = this.todayService.contract()?.readiness ?? 73;
+      this.applyReadinessRing(pct);
+    });
+  }
 
-        requestAnimationFrame(() => {
-          setTimeout(() => {
-            el.style.strokeDashoffset = String(circ * (1 - 0.73));
-          }, 60);
-        });
-      }
+  ngOnInit(): void {
+    void this.todayService.loadToday();
+  }
+
+  protected get timeOfDay(): string {
+    const h = new Date().getHours();
+    return h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
+  }
+
+  protected userFirstName(): string {
+    const parts = this.authService.currentUser()?.name?.split(' ');
+    return parts?.[0] ?? '';
+  }
+
+  weekProgressPercent(c: Contract): number {
+    if (!c.weekly_hours_budget) {
+      return 0;
+    }
+    return (c.hours_done / c.weekly_hours_budget) * 100;
+  }
+
+  contractStatusLabel(c: Contract): string {
+    switch (c.status) {
+      case 'on_track':
+        return 'On Track';
+      case 'at_risk':
+        return 'At Risk';
+      case 'off_track':
+        return 'Off Track';
+      default:
+        return 'On Track';
+    }
+  }
+
+  contractStatusPillBg(c: Contract): string {
+    switch (c.status) {
+      case 'on_track':
+        return 'var(--emerald-light)';
+      case 'at_risk':
+        return 'rgba(245, 158, 11, 0.15)';
+      case 'off_track':
+        return 'var(--red-light)';
+      default:
+        return 'var(--emerald-light)';
+    }
+  }
+
+  contractStatusPillFg(c: Contract): string {
+    switch (c.status) {
+      case 'on_track':
+        return 'var(--emerald)';
+      case 'at_risk':
+        return '#F59E0B';
+      case 'off_track':
+        return 'var(--red)';
+      default:
+        return 'var(--emerald)';
+    }
+  }
+
+  contractStatusPillBorder(c: Contract): string {
+    switch (c.status) {
+      case 'on_track':
+        return 'var(--emerald-border)';
+      case 'at_risk':
+        return 'rgba(245, 158, 11, 0.35)';
+      case 'off_track':
+        return 'var(--red-border)';
+      default:
+        return 'var(--emerald-border)';
+    }
+  }
+
+  private applyReadinessRing(readinessPercent: number): void {
+    const ring = this.ringRef()?.nativeElement;
+    if (!ring) {
+      return;
+    }
+    const circ = 2 * Math.PI * 27;
+    ring.style.strokeDasharray = String(circ);
+    ring.style.strokeDashoffset = String(circ);
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        ring.style.strokeDashoffset = String(circ * (1 - readinessPercent / 100));
+      }, 60);
     });
   }
 
