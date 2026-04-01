@@ -39,7 +39,7 @@ func (r *PostgresUserRepo) CreateSchool(ctx context.Context, name, domainStr str
 func (r *PostgresUserRepo) FindSchoolByDomain(ctx context.Context, domainStr string) (*domain.School, error) {
 	var s domain.School
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, name, domain, created_at FROM schools WHERE domain = $1`,
+		`SELECT id, name, domain, created_at FROM schools WHERE lower(domain) = lower($1)`,
 		domainStr,
 	).Scan(&s.ID, &s.Name, &s.Domain, &s.CreatedAt)
 	if err != nil {
@@ -74,7 +74,7 @@ func (r *PostgresUserRepo) FindUserByEmail(ctx context.Context, email string, sc
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, school_id, name, email, password_hash, created_at
 		 FROM users
-		 WHERE email = $1 AND school_id = $2`,
+		 WHERE lower(email) = lower($1) AND school_id = $2`,
 		email, schoolID,
 	).Scan(&u.ID, &u.SchoolID, &u.Name, &u.Email, &u.PasswordHash, &u.CreatedAt)
 	if err != nil {

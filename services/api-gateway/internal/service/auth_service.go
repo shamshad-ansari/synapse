@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"strings"
 	"time"
 	"unicode"
 
@@ -55,6 +56,8 @@ func NewAuthService(repo domain.UserRepository, cfg *config.Config) AuthService 
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 
 func (s *authServiceImpl) Register(ctx context.Context, in RegisterInput) (*AuthOutput, error) {
+	in.Email = normalizeEmail(in.Email)
+	in.SchoolDomain = normalizeSchoolDomain(in.SchoolDomain)
 	if err := validateRegisterInput(in); err != nil {
 		return nil, err
 	}
@@ -81,6 +84,8 @@ func (s *authServiceImpl) Register(ctx context.Context, in RegisterInput) (*Auth
 }
 
 func (s *authServiceImpl) Login(ctx context.Context, in LoginInput) (*AuthOutput, error) {
+	in.Email = normalizeEmail(in.Email)
+	in.SchoolDomain = normalizeSchoolDomain(in.SchoolDomain)
 	school, err := s.repo.FindSchoolByDomain(ctx, in.SchoolDomain)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
@@ -198,4 +203,12 @@ func isValidHostname(h string) bool {
 // domainToSchoolName produces a default school name from its domain.
 func domainToSchoolName(d string) string {
 	return d
+}
+
+func normalizeEmail(s string) string {
+	return strings.ToLower(strings.TrimSpace(s))
+}
+
+func normalizeSchoolDomain(s string) string {
+	return strings.ToLower(strings.TrimSpace(s))
 }
