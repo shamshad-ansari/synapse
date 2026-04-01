@@ -100,7 +100,7 @@ interface PeerInfo {
               <lucide-icon name="calendar" [size]="14" [strokeWidth]="2" style="color: var(--navy)" /> Exam · {{ c.exam_date }} <span style="color: var(--ink-faint); margin-left: 4px">{{ c.days_until }} days</span>
             </div>
             <div class="flex items-center gap-1.5">
-              <lucide-icon name="clock" [size]="14" [strokeWidth]="2" style="color: var(--navy)" /> 45 min budget today
+              <lucide-icon name="clock" [size]="14" [strokeWidth]="2" style="color: var(--navy)" /> {{ dailyBudgetMinutes(c) }} min budget today
             </div>
             <span
               class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full"
@@ -144,8 +144,8 @@ interface PeerInfo {
             Readiness
           </div>
           <div style="font-size: 12.5px; color: var(--ink-muted); line-height: 1.7">
-            Next exam topic:<br />
-            <strong style="color: var(--ink); font-family: var(--font-display)">Proof Theory</strong> in 3 days
+            Focus area:<br />
+            <strong style="color: var(--ink); font-family: var(--font-display)">{{ topWeakTopic() }}</strong>
           </div>
         </div>
       </div>
@@ -161,7 +161,7 @@ interface PeerInfo {
           <div>
             <div class="flex items-baseline gap-2.5 mb-5">
               <div style="font-size: 15px; font-weight: 700; font-family: var(--font-display); color: var(--ink)">Do This Now</div>
-              <div style="font-size: 11.5px; color: var(--ink-faint); font-family: var(--mono)">3 actions</div>
+              <div style="font-size: 11.5px; color: var(--ink-faint); font-family: var(--mono)">{{ todayService.actions().length }} actions</div>
               <div
                 class="see-all-link ml-auto cursor-pointer transition-all"
                 style="font-size: 13px; color: var(--navy); font-weight: 600; transition: var(--transition-base)"
@@ -208,39 +208,45 @@ interface PeerInfo {
             <div>
               <div class="flex items-baseline gap-2.5 mb-5">
                 <div style="font-size: 15px; font-weight: 700; font-family: var(--font-display); color: var(--ink)">Weak Topics</div>
-                <div style="font-size: 11.5px; color: var(--ink-faint); font-family: var(--mono)">3 flagged</div>
+                <div style="font-size: 11.5px; color: var(--ink-faint); font-family: var(--mono)">{{ todayService.weakTopics().length }} flagged</div>
                 <div class="ml-auto cursor-pointer" style="font-size: 13px; color: var(--navy); font-weight: 600">View all →</div>
               </div>
-              @for (topic of todayService.weakTopics(); track topic.name) {
-                <div
-                  class="weak-topic-card flex items-center gap-4 cursor-pointer"
-                  style="padding: 14px 16px; border-radius: var(--r-lg); border: 1px solid #EAEAEA; background: #FFFFFF; box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05); transition: all var(--transition-base); margin-bottom: 8px"
-                  [style.animation-delay]="(0.5 + $index * 0.1) + 's'"
-                >
-                  <div class="flex items-end gap-1 h-10" style="width: 60px; flex-shrink: 0">
-                    @for (bar of topic.bars; track $index) {
+              @if (todayService.weakTopics().length === 0) {
+                <div style="padding: 16px; border-radius: var(--r-lg); border: 1px dashed var(--divider); background: var(--surface-sub); color: var(--ink-muted); font-size: 12.5px; line-height: 1.6">
+                  No weak topics flagged yet. Complete a review session to generate mastery signals.
+                </div>
+              } @else {
+                @for (topic of todayService.weakTopics(); track topic.name) {
+                  <div
+                    class="weak-topic-card flex items-center gap-4 cursor-pointer"
+                    style="padding: 14px 16px; border-radius: var(--r-lg); border: 1px solid #EAEAEA; background: #FFFFFF; box-shadow: 0 4px 20px -2px rgba(0,0,0,0.05); transition: all var(--transition-base); margin-bottom: 8px"
+                    [style.animation-delay]="(0.5 + $index * 0.1) + 's'"
+                  >
+                    <div class="flex items-end gap-1 h-10" style="width: 60px; flex-shrink: 0">
+                      @for (bar of topic.bars; track $index) {
+                        <div
+                          class="weak-bar"
+                          style="flex: 1; border-radius: 2px 2px 0 0; min-height: 4px"
+                          [style.height]="bar + '%'"
+                          [style.background]="getBarColor(bar)"
+                          [style.animation-delay]="(0.2 + $index * 0.05) + 's'"
+                        ></div>
+                      }
+                    </div>
+                    <div class="flex-1">
+                      <div style="font-size: 13.5px; font-weight: 600; color: var(--ink)">{{ topic.name }}</div>
+                      <div style="font-size: 11px; color: var(--ink-faint); margin-top: 1px; text-transform: uppercase; letter-spacing: 0.3px">
+                        {{ getMasteryStatus(topic.mastery) }}
+                      </div>
+                    </div>
+                    <div class="text-right">
                       <div
-                        class="weak-bar"
-                        style="flex: 1; border-radius: 2px 2px 0 0; min-height: 4px"
-                        [style.height]="bar + '%'"
-                        [style.background]="getBarColor(bar)"
-                        [style.animation-delay]="(0.2 + $index * 0.05) + 's'"
-                      ></div>
-                    }
-                  </div>
-                  <div class="flex-1">
-                    <div style="font-size: 13.5px; font-weight: 600; color: var(--ink)">{{ topic.name }}</div>
-                    <div style="font-size: 11px; color: var(--ink-faint); margin-top: 1px; text-transform: uppercase; letter-spacing: 0.3px">
-                      {{ getMasteryStatus(topic.mastery) }}
+                        style="font-size: 14px; font-weight: 700; font-family: var(--font-display)"
+                        [style.color]="getMasteryColor(topic.mastery)"
+                      >{{ topic.mastery }}%</div>
                     </div>
                   </div>
-                  <div class="text-right">
-                    <div
-                      style="font-size: 14px; font-weight: 700; font-family: var(--font-display)"
-                      [style.color]="getMasteryColor(topic.mastery)"
-                    >{{ topic.mastery }}%</div>
-                  </div>
-                </div>
+                }
               }
             </div>
 
@@ -250,22 +256,28 @@ interface PeerInfo {
                 <div style="font-size: 15px; font-weight: 700; font-family: var(--font-display); color: var(--ink)">Mastery Pulse</div>
                 <div style="font-size: 11.5px; color: var(--ink-faint); font-family: var(--mono)">Last 7 topics</div>
               </div>
-              <div class="flex items-end gap-2 h-32" style="padding: 16px; background: var(--surface-sub); border-radius: var(--r-lg); border: 1px solid var(--divider)">
-                @for (height of masteryBars; track $index) {
-                  <div
-                    class="mastery-bar"
-                    style="flex: 1; border-radius: 4px 4px 0 0; min-height: 8px"
-                    [style.height]="height + '%'"
-                    [style.background]="getBarColor(height)"
-                    [style.animation-delay]="(0.6 + $index * 0.08) + 's'"
-                  ></div>
-                }
-              </div>
-              <div class="flex justify-between mt-2" style="font-size: 10px; color: var(--ink-faint); font-family: var(--mono)">
-                @for (label of masteryLabels; track $index) {
-                  <span>{{ label }}</span>
-                }
-              </div>
+              @if (masteryBars().length === 0) {
+                <div class="flex items-center justify-center" style="height: 128px; padding: 16px; background: var(--surface-sub); border-radius: var(--r-lg); border: 1px dashed var(--divider); color: var(--ink-muted); font-size: 12.5px">
+                  Mastery pulse appears after topic-linked review activity.
+                </div>
+              } @else {
+                <div class="flex items-end gap-2 h-32" style="padding: 16px; background: var(--surface-sub); border-radius: var(--r-lg); border: 1px solid var(--divider)">
+                  @for (height of masteryBars(); track $index) {
+                    <div
+                      class="mastery-bar"
+                      style="flex: 1; border-radius: 4px 4px 0 0; min-height: 8px"
+                      [style.height]="height + '%'"
+                      [style.background]="getBarColor(height)"
+                      [style.animation-delay]="(0.6 + $index * 0.08) + 's'"
+                    ></div>
+                  }
+                </div>
+                <div class="flex justify-between mt-2" style="font-size: 10px; color: var(--ink-faint); font-family: var(--mono)">
+                  @for (label of masteryLabels(); track $index) {
+                    <span>{{ label }}</span>
+                  }
+                </div>
+              }
             </div>
           </div>
 
@@ -276,7 +288,7 @@ interface PeerInfo {
             <div>
               <div class="flex items-baseline gap-2.5 mb-5">
                 <div style="font-size: 15px; font-weight: 700; font-family: var(--font-display); color: var(--ink)">Suggested Tutors</div>
-                <div style="font-size: 11.5px; color: var(--ink-faint); font-family: var(--mono)">for Recursion</div>
+                <div style="font-size: 11.5px; color: var(--ink-faint); font-family: var(--mono)">for {{ topWeakTopic() }}</div>
                 <div class="ml-auto cursor-pointer" style="font-size: 13px; color: var(--navy); font-weight: 600" (click)="navigateTo('/tutoring')">Browse →</div>
               </div>
               @for (peer of peers; track peer.name) {
@@ -358,7 +370,7 @@ interface PeerInfo {
               <div style="font-size: 11.5px; color: var(--ink-faint); font-family: var(--mono)">Mon → Sun</div>
             </div>
             <div class="flex gap-2 justify-center">
-              @for (status of streakDays; track $index) {
+              @for (status of streakDays(); track $index) {
                 <div
                   style="width: 9px; height: 9px; border-radius: 50%"
                   [style.background]="getStreakBackground(status)"
@@ -572,18 +584,33 @@ export default class TodayTabComponent implements OnInit {
     { avatar: 'MR', name: 'Maya Roth', subject: 'Logic · 91% mastery', rating: '4.8', bgColor: 'var(--purple)' },
   ];
 
-  readonly streakDays: (boolean | string)[] = [true, true, true, false, true, false, 'today'];
+  readonly streakDays = computed<(boolean | string)[]>(() => {
+    const count = Math.max(0, Math.min(14, this.todayService.streak()));
+    const out: (boolean | string)[] = [];
+    for (let i = 6; i >= 1; i -= 1) {
+      out.push(count >= i);
+    }
+    out.push('today');
+    return out;
+  });
 
-  readonly masteryBars = [65, 42, 78, 29, 88, 51, 73];
+  readonly masteryBars = computed(() => {
+    const topics = this.todayService.weakTopics();
+    return topics.map((t) => t.mastery).slice(0, 7);
+  });
 
-  readonly masteryLabels = ['Recursion', 'Induction', 'Set Theory', 'Logic', 'Graphs', 'Proofs', 'Other'];
+  readonly masteryLabels = computed(() => {
+    return this.todayService.weakTopics().map((t) => t.name).slice(0, 7);
+  });
+
+  readonly topWeakTopic = computed(() => this.todayService.weakTopics()[0]?.name ?? 'No weak topics yet');
 
   constructor() {
     afterNextRender(() => {
-      this.applyReadinessRing(this.todayService.contract()?.readiness ?? 73);
+      this.applyReadinessRing(this.todayService.contract()?.readiness ?? 0);
     });
     effect(() => {
-      const pct = this.todayService.contract()?.readiness ?? 73;
+      const pct = this.todayService.contract()?.readiness ?? 0;
       this.applyReadinessRing(pct);
     });
   }
@@ -598,8 +625,17 @@ export default class TodayTabComponent implements OnInit {
   }
 
   protected userFirstName(): string {
+    const todayName = this.todayService.greetingName();
+    if (todayName?.trim()) {
+      return todayName.split(' ')[0];
+    }
     const parts = this.authService.currentUser()?.name?.split(' ');
     return parts?.[0] ?? '';
+  }
+
+  dailyBudgetMinutes(c: Contract): number {
+    const daily = (c.weekly_hours_budget || 0) * 60 / 7;
+    return Math.max(0, Math.round(daily));
   }
 
   weekProgressPercent(c: Contract): number {
