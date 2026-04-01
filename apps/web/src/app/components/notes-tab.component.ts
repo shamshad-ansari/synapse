@@ -1,9 +1,11 @@
-import { Component, signal, inject } from '@angular/core';
+import { Component, signal, inject, computed, effect, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { trigger, transition, style, animate } from '@angular/animations';
+import { LearningService } from '../features/learning/learning.service';
+import { CanvasService } from '../features/canvas/canvas.service';
 
-interface Course {
+interface CourseRow {
   id: string;
   name: string;
   iconColor: string;
@@ -42,7 +44,7 @@ interface MasteryBox {
         <div class="flex items-center justify-between gap-4">
           <div>
             <div style="font-size: 26px; font-weight: 700; letter-spacing: -0.6px; font-family: var(--font-display); color: var(--ink);">Notes</div>
-            <div style="font-size: 13.5px; color: var(--ink-muted); margin-top: 4px;">Your knowledge base · 3 courses · 14 notes</div>
+            <div style="font-size: 13.5px; color: var(--ink-muted); margin-top: 4px;">Your knowledge base · {{ learningService.courses().length }} courses · 14 notes</div>
           </div>
           <div class="flex items-center gap-2">
             <button
@@ -85,40 +87,128 @@ interface MasteryBox {
             Courses
           </div>
 
-          @for (course of courses; track course.id) {
-            <div class="mb-0.5">
-              <div
-                class="flex items-center gap-1.5 cursor-pointer transition-all duration-100"
-                style="padding: 5px 6px; border-radius: var(--r-md); font-size: 13px; font-weight: 500; color: var(--ink-2);"
-                (click)="toggleCourse(course.id)"
-              >
-                <lucide-icon
-                  name="chevron-right"
-                  [size]="8"
-                  style="color: var(--ink-faint); transition: transform 0.16s;"
-                  [style.transform]="expandedCourse() === course.id ? 'rotate(90deg)' : 'rotate(0deg)'"
-                />
-                <lucide-icon
-                  name="book-open"
-                  [size]="14"
-                  [strokeWidth]="2"
-                  [style.color]="course.iconColor"
-                />
-                <span>{{ course.name }}</span>
+          @if (learningService.loading()) {
+            @for (s of [1, 2, 3]; track s) {
+              <div class="mb-2" style="padding: 5px 6px;">
+                <div
+                  class="skeleton"
+                  style="height: 14px; border-radius: var(--r-md); width: 140px; background: var(--surface-sub); animation: pulse 1.5s ease-in-out infinite"
+                ></div>
               </div>
-              @if (expandedCourse() === course.id) {
-                <div @expandCollapse style="padding-left: 14px;">
-                  @for (note of course.notes; track note) {
-                    <div
-                      class="note-item flex items-center gap-1.5 cursor-pointer"
-                      [class.note-item-active]="course.id === 'discrete' && note === 'Induction Overview'"
-                    >
-                      <lucide-icon name="file-text" [size]="14" [strokeWidth]="2" style="position: relative; z-index: 1;" />
-                      <span style="position: relative; z-index: 1;">{{ note }}</span>
-                    </div>
-                  }
+            }
+          } @else {
+            @for (course of displayCourses(); track course.id) {
+              <div class="mb-0.5">
+                <div
+                  class="flex items-center gap-1.5 cursor-pointer transition-all duration-100"
+                  style="padding: 5px 6px; border-radius: var(--r-md); font-size: 13px; font-weight: 500; color: var(--ink-2);"
+                  (click)="toggleCourse(course.id)"
+                >
+                  <lucide-icon
+                    name="chevron-right"
+                    [size]="8"
+                    style="color: var(--ink-faint); transition: transform 0.16s;"
+                    [style.transform]="expandedCourse() === course.id ? 'rotate(90deg)' : 'rotate(0deg)'"
+                  />
+                  <lucide-icon
+                    name="book-open"
+                    [size]="14"
+                    [strokeWidth]="2"
+                    [style.color]="course.iconColor"
+                  />
+                  <span>{{ course.name }}</span>
+                </div>
+                @if (expandedCourse() === course.id) {
+                  <div @expandCollapse style="padding-left: 14px;">
+                    @for (note of course.notes; track note) {
+                      <div
+                        class="note-item flex items-center gap-1.5 cursor-pointer"
+                        [class.note-item-active]="course.id === 'discrete' && note === 'Induction Overview'"
+                      >
+                        <lucide-icon name="file-text" [size]="14" [strokeWidth]="2" style="position: relative; z-index: 1;" />
+                        <span style="position: relative; z-index: 1;">{{ note }}</span>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          }
+
+          @if (selectedCourseId()) {
+            <div
+              class="card"
+              style="margin-top: 14px; padding: 14px; border: 1px solid #EAEAEA; border-radius: var(--r-xl); box-shadow: var(--shadow-md); background: #FFFFFF;"
+            >
+              <div style="font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 8px">
+                Generate Flashcards with AI
+              </div>
+              <textarea
+                [value]="noteInput()"
+                (input)="onNoteInput($event)"
+                placeholder="Paste your lecture notes here..."
+                style="width:100%; min-height:120px; background:var(--surface-sub);
+                       border:1px solid var(--divider); border-radius:var(--r-md);
+                       padding:10px 12px; font-size:13.5px; font-family:var(--font);
+                       color:var(--ink); resize:vertical; outline:none"
+              ></textarea>
+              <button
+                type="button"
+                class="submit-btn"
+                [disabled]="!noteInput().trim() || learningService.generating()"
+                (click)="onGenerate()"
+                style="margin-top: 10px; font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: var(--r-lg); border: none; background: var(--navy); color: #fff; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;"
+                [style.opacity]="!noteInput().trim() || learningService.generating() ? '0.55' : '1'"
+              >
+                @if (learningService.generating()) {
+                  <lucide-icon name="refresh-cw" [size]="14" class="spin-icon" />
+                  Generating...
+                } @else {
+                  Generate Flashcards
+                }
+              </button>
+              @if (learningService.generationError()) {
+                <div style="margin-top: 8px; font-size: 12.5px; color: var(--red);">
+                  {{ learningService.generationError() }}
                 </div>
               }
+            </div>
+          }
+
+          @if (learningService.generatedCards().length > 0) {
+            <div
+              class="card"
+              style="margin-top: 12px; padding: 14px; border: 1px solid #EAEAEA; border-radius: var(--r-xl); box-shadow: var(--shadow-md); background: #FFFFFF;"
+            >
+              <div style="font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 12px">
+                Review Generated Cards ({{ learningService.generatedCards().length }})
+              </div>
+              @for (card of learningService.generatedCards(); track card.prompt) {
+                <div
+                  class="generated-card"
+                  style="border: 1px solid var(--divider);
+                    border-radius: var(--r-md); padding: 12px; margin-bottom: 8px"
+                >
+                  <div style="font-size: 13px; font-weight: 500; color: var(--ink)">{{ card.prompt }}</div>
+                  <div style="font-size: 12.5px; color: var(--ink-muted); margin-top: 4px">{{ card.answer }}</div>
+                </div>
+              }
+              <div style="display:flex; gap:8px; margin-top:8px; flex-wrap: wrap;">
+                <button
+                  type="button"
+                  (click)="onAcceptAll()"
+                  style="font-size: 12px; font-weight: 700; padding: 8px 14px; border-radius: var(--r-lg); border: none; background: var(--navy); color: #fff; cursor: pointer; font-family: var(--font-display); flex: 1; min-width: 120px;"
+                >
+                  Add All to Deck ({{ learningService.generatedCards().length }})
+                </button>
+                <button
+                  type="button"
+                  (click)="learningService.generatedCards.set([])"
+                  style="font-size: 12px; font-weight: 600; padding: 8px 14px; border-radius: var(--r-lg); border: 1px solid var(--divider); background: transparent; color: var(--ink-2); cursor: pointer;"
+                >
+                  Discard
+                </button>
+              </div>
             </div>
           }
         </div>
@@ -358,33 +448,63 @@ interface MasteryBox {
     .btn-confusing:active {
       transform: scale(0.95);
     }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .spin-icon {
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
   `],
 })
-export default class NotesTabComponent {
-  private router = inject(Router);
+export default class NotesTabComponent implements OnInit {
+  private readonly router = inject(Router);
+  protected readonly learningService = inject(LearningService);
+  private readonly canvasService = inject(CanvasService);
 
-  expandedCourse = signal('discrete');
-
-  courses: Course[] = [
-    {
-      id: 'discrete',
-      name: 'CS225 Discrete Math',
-      iconColor: 'var(--navy)',
-      notes: ['Induction Overview', 'Recursion Notes', 'Set Theory Basics', 'Logic & Proof'],
-    },
-    {
-      id: 'linear',
-      name: '18.06 Linear Algebra',
-      iconColor: 'var(--emerald)',
-      notes: ['Vector Spaces', 'Eigenvalues'],
-    },
-    {
-      id: 'algorithms',
-      name: '6.006 Algorithms',
-      iconColor: 'var(--ink-muted)',
-      notes: ['DP Introduction', 'Graph Algorithms'],
-    },
+  private readonly placeholderNotes = [
+    'Induction Overview',
+    'Recursion Notes',
+    'Set Theory Basics',
+    'Logic & Proof',
   ];
+
+  readonly displayCourses = computed<CourseRow[]>(() =>
+    this.learningService.courses().map((c) => ({
+      id: c.id,
+      name: c.name,
+      iconColor: c.color || '#102E67',
+      notes: this.placeholderNotes,
+    })),
+  );
+
+  expandedCourse = signal('');
+  readonly noteInput = signal('');
+  readonly selectedCourseId = signal<string | null>(null);
+
+  constructor() {
+    effect(() => {
+      const rows = this.displayCourses();
+      const cur = this.expandedCourse();
+      if (rows.length && !rows.some((r) => r.id === cur)) {
+        const first = rows[0].id;
+        this.expandedCourse.set(first);
+        this.selectedCourseId.set(first);
+      }
+    });
+  }
+
+  ngOnInit(): void {
+    void this.learningService.loadCourses();
+    void this.canvasService.loadStatus();
+  }
 
   masteryBoxes: MasteryBox[] = [
     {
@@ -426,7 +546,31 @@ export default class NotesTabComponent {
   ];
 
   toggleCourse(id: string): void {
+    this.selectedCourseId.set(id);
     this.expandedCourse.set(this.expandedCourse() === id ? '' : id);
+  }
+
+  onNoteInput(ev: Event): void {
+    const t = ev.target as HTMLTextAreaElement | null;
+    this.noteInput.set(t?.value ?? '');
+  }
+
+  onGenerate(): void {
+    const cid = this.selectedCourseId();
+    if (!cid) {
+      return;
+    }
+    void this.learningService.generateFlashcards(cid, this.noteInput(), undefined);
+  }
+
+  onAcceptAll(): void {
+    const cid = this.selectedCourseId();
+    if (!cid) {
+      return;
+    }
+    void this.learningService
+      .acceptGeneratedCards(cid, this.learningService.generatedCards())
+      .then(() => this.noteInput.set(''));
   }
 
   navigateToReview(event: Event): void {
