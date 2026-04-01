@@ -9,6 +9,17 @@ import (
 	"time"
 )
 
+// ResolveServerURL returns the URL to use for server-side calls to a Canvas instance.
+// If an internal override is configured (CANVAS_INTERNAL_URL), it replaces the
+// scheme+host of institutionURL so browser-facing links still use the public URL
+// while server-to-server calls use the internal hostname.
+func ResolveServerURL(institutionURL, internalOverride string) string {
+	if internalOverride == "" {
+		return institutionURL
+	}
+	return internalOverride
+}
+
 // CanvasAPIError is returned when the Canvas API responds with a non-200 status.
 type CanvasAPIError struct {
 	StatusCode int
@@ -40,6 +51,26 @@ type CanvasSubmission struct {
 	EnteredGrade string     `json:"entered_grade"`
 	SubmittedAt  *time.Time `json:"submitted_at"`
 	GradedAt     *time.Time `json:"graded_at"`
+	WorkflowState string    `json:"workflow_state"`
+	Late          bool      `json:"late"`
+	Missing       bool      `json:"missing"`
+	Excused       bool      `json:"excused"`
+}
+
+type CanvasAnnouncement struct {
+	ID        int        `json:"id"`
+	Title     string     `json:"title"`
+	Message   string     `json:"message"`
+	PostedAt  *time.Time `json:"posted_at"`
+	HTMLURL   string     `json:"html_url"`
+}
+
+type CanvasDiscussionTopic struct {
+	ID        int        `json:"id"`
+	Title     string     `json:"title"`
+	Message   string     `json:"message"`
+	PostedAt  *time.Time `json:"posted_at"`
+	HTMLURL   string     `json:"html_url"`
 }
 
 type canvasCourseWithSyllabus struct {
@@ -139,4 +170,26 @@ func (c *CanvasClient) GetSyllabusBody(ctx context.Context, courseID string) (st
 		return "", fmt.Errorf("GetSyllabusBody: %w", err)
 	}
 	return course.SyllabusBody, nil
+}
+
+// GetAnnouncements fetches recent announcements for a course.
+func (c *CanvasClient) GetAnnouncements(ctx context.Context, courseID string) ([]CanvasAnnouncement, error) {
+	var out []CanvasAnnouncement
+	path := fmt.Sprintf("/api/v1/courses/%s/announcements?per_page=50", courseID)
+	err := c.doRequest(ctx, path, &out)
+	if err != nil {
+		return nil, fmt.Errorf("GetAnnouncements: %w", err)
+	}
+	return out, nil
+}
+
+// GetDiscussionTopics fetches discussion topics for a course.
+func (c *CanvasClient) GetDiscussionTopics(ctx context.Context, courseID string) ([]CanvasDiscussionTopic, error) {
+	var out []CanvasDiscussionTopic
+	path := fmt.Sprintf("/api/v1/courses/%s/discussion_topics?per_page=50", courseID)
+	err := c.doRequest(ctx, path, &out)
+	if err != nil {
+		return nil, fmt.Errorf("GetDiscussionTopics: %w", err)
+	}
+	return out, nil
 }

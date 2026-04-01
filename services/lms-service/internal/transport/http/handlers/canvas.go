@@ -15,10 +15,12 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
+	"github.com/shamshad-ansari/synapse/services/lms-service/internal/canvas"
 	"github.com/shamshad-ansari/synapse/services/lms-service/internal/config"
 	"github.com/shamshad-ansari/synapse/services/lms-service/internal/crypto"
 	"github.com/shamshad-ansari/synapse/services/lms-service/internal/domain"
 	"github.com/shamshad-ansari/synapse/services/lms-service/internal/oauth"
+	"github.com/shamshad-ansari/synapse/services/lms-service/internal/sync"
 	"github.com/shamshad-ansari/synapse/services/lms-service/internal/transport/http/middleware"
 	"github.com/shamshad-ansari/synapse/services/lms-service/internal/transport/respond"
 )
@@ -26,6 +28,7 @@ import (
 type CanvasHandler struct {
 	Cfg    *config.Config
 	Repo   domain.LMSRepository
+	Syncer *sync.Syncer
 	Redis  *redis.Client
 	Logger *zap.Logger
 }
@@ -144,9 +147,10 @@ func (h *CanvasHandler) CallbackCanvas(w http.ResponseWriter, r *http.Request) {
 	}
 	h.Redis.Del(r.Context(), redisKey)
 
+	serverURL := canvas.ResolveServerURL(state.InstitutionURL, h.Cfg.CanvasInternalURL)
 	tokenResp, err := oauth.ExchangeCode(
 		r.Context(),
-		state.InstitutionURL,
+		serverURL,
 		h.Cfg.CanvasClientID,
 		h.Cfg.CanvasClientSecret,
 		code,
@@ -318,7 +322,7 @@ func (h *CanvasHandler) Status(w http.ResponseWriter, r *http.Request) {
 	respond.JSON(w, http.StatusOK, conn.ToResponse())
 }
 
-// Sync enqueues a sync job for the authenticated user's LMS connection.
+// Sync runs a full Canvas → Postgres sync for the authenticated user's LMS connection.
 // POST /v1/lms/sync
 func (h *CanvasHandler) Sync(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromCtx(r.Context())
@@ -332,7 +336,7 @@ func (h *CanvasHandler) Sync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := h.Repo.FindConnectionByUser(r.Context(), userID, schoolID)
+	conn, err := h.Repo.FindConnectionByUser(r.Context(), userID, schoolID)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			respond.Error(w, http.StatusNotFound, "not connected")
@@ -343,9 +347,51 @@ func (h *CanvasHandler) Sync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.Logger.Info("sync requested", zap.String("user_id", userID.String()))
+	if err := h.Syncer.SyncUser(r.Context(), conn, sync.SyncOptions{
+		InternalURL:        h.Cfg.CanvasInternalURL,
+		CanvasClientID:     h.Cfg.CanvasClientID,
+		CanvasClientSecret: h.Cfg.CanvasClientSecret,
+	}); err != nil {
+		h.Logger.Error("lms sync failed", zap.Error(err))
+		respond.Error(w, http.StatusBadGateway, "sync failed")
+		return
+	}
 
-	respond.JSON(w, http.StatusOK, map[string]string{"status": "sync_queued"})
+	respond.JSON(w, http.StatusOK, map[string]string{"status": "sync_complete"})
+}
+
+// ListSyncedCourses returns courses last synced from Canvas for the authenticated user.
+// GET /v1/lms/courses
+func (h *CanvasHandler) ListSyncedCourses(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromCtx(r.Context())
+	if !ok {
+		respond.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	schoolID, ok := middleware.SchoolIDFromCtx(r.Context())
+	if !ok {
+		respond.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	courses, err := h.Repo.ListCoursesByUser(r.Context(), userID, schoolID)
+	if err != nil {
+		h.Logger.Error("failed to list synced courses", zap.Error(err))
+		respond.Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	out := make([]domain.LMSCourseResponse, 0, len(courses))
+	for _, c := range courses {
+		out = append(out, domain.LMSCourseResponse{
+			LMSCourseID:  c.LMSCourseID,
+			CourseName:   c.LMSCourseName,
+			Term:         c.LMSTerm,
+			LastSyncedAt: c.LastSyncedAt,
+		})
+	}
+
+	respond.JSON(w, http.StatusOK, out)
 }
 
 // Disconnect removes the authenticated user's LMS connection.

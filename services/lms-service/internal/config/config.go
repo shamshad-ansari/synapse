@@ -3,6 +3,8 @@ package config
 import (
 	"encoding/base64"
 	"os"
+	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -17,17 +19,26 @@ type Config struct {
 	EncryptionKey      []byte
 	FrontendURL        string
 	CanvasRedirectURI  string
+	CanvasInternalURL  string
+	SyncIntervalMinutes int
+	SyncStartupDelaySec int
 }
 
 // Load reads configuration from environment variables with sensible defaults.
 func Load() Config {
-	keyB64 := getEnv("ENCRYPTION_KEY", "")
+	keyB64 := strings.TrimSpace(getEnv("ENCRYPTION_KEY", ""))
+	keyB64 = strings.Trim(keyB64, `"'`)
 	var key []byte
 	if keyB64 != "" {
 		var err error
 		key, err = base64.StdEncoding.DecodeString(keyB64)
 		if err != nil {
-			panic("ENCRYPTION_KEY must be valid base64: " + err.Error())
+			if len(keyB64) == 32 {
+				// Dev convenience fallback: allow a raw 32-byte key.
+				key = []byte(keyB64)
+			} else {
+				panic("ENCRYPTION_KEY must be valid base64 (or a raw 32-byte string): " + err.Error())
+			}
 		}
 	}
 
@@ -43,6 +54,9 @@ func Load() Config {
 		EncryptionKey:      key,
 		FrontendURL:        getEnv("FRONTEND_URL", "http://localhost:4200"),
 		CanvasRedirectURI:  getEnv("CANVAS_REDIRECT_URI", "http://localhost:8081/v1/lms/callback/canvas"),
+		CanvasInternalURL:  getEnv("CANVAS_INTERNAL_URL", ""),
+		SyncIntervalMinutes: getEnvInt("LMS_SYNC_INTERVAL_MINUTES", 15),
+		SyncStartupDelaySec: getEnvInt("LMS_SYNC_STARTUP_DELAY_SEC", 20),
 	}
 }
 
@@ -70,4 +84,16 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func getEnvInt(key string, fallback int) int {
+	raw := strings.TrimSpace(getEnv(key, ""))
+	if raw == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		return fallback
+	}
+	return n
 }
