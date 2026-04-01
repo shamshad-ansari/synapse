@@ -42,6 +42,10 @@ func RequireToken(next http.Handler) http.Handler {
 			writeError(w, http.StatusUnauthorized, "Invalid access token.")
 			return
 		}
+		if !isIssuedAccessToken(token) {
+			writeError(w, http.StatusUnauthorized, "Invalid access token.")
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
 }
