@@ -69,3 +69,40 @@ func ExchangeCode(ctx context.Context, institutionURL, clientID, clientSecret, c
 
 	return &tokenResp, nil
 }
+
+// RefreshToken exchanges a refresh token for a new access token pair.
+func RefreshToken(ctx context.Context, institutionURL, clientID, clientSecret, refreshToken string) (*TokenResponse, error) {
+	form := url.Values{}
+	form.Set("grant_type", "refresh_token")
+	form.Set("client_id", clientID)
+	form.Set("client_secret", clientSecret)
+	form.Set("refresh_token", refreshToken)
+
+	tokenURL := institutionURL + "/login/oauth2/token"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("RefreshToken: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("RefreshToken: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("RefreshToken: read body: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("RefreshToken: token endpoint returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	var tokenResp TokenResponse
+	if err := json.Unmarshal(body, &tokenResp); err != nil {
+		return nil, fmt.Errorf("RefreshToken: json decode: %w", err)
+	}
+	return &tokenResp, nil
+}
