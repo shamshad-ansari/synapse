@@ -1,14 +1,8 @@
-import { Component, signal, computed } from '@angular/core';
+import { Component, signal, computed, inject, effect, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { trigger, transition, style, animate, query, stagger } from '@angular/animations';
-
-const cards = [
-  { q: 'What is the difference between weak and strong induction?', a: 'Weak induction assumes P(k) to prove P(k+1). Strong induction assumes P(j) for all j ≤ k — giving you all previous cases. Strong induction is used when proving P(k+1) requires more than just the immediately prior case.', src: 'Induction Overview · S3' },
-  { q: 'Define the base case in mathematical induction.', a: 'The base case proves P(n₀) directly — usually P(0) or P(1). It is the foundation: without it, the inductive chain has nowhere to anchor.', src: 'Induction Overview · S1' },
-  { q: 'When can a recursion have multiple base cases?', a: 'When the inductive step requires P(k) AND P(k-1) to prove P(k+1), you need base cases for both P(0) and P(1). E.g., Fibonacci.', src: 'Recursion Notes · S2' },
-  { q: 'What is the induction hypothesis?', a: 'The assumption that P(k) holds for some arbitrary but fixed k ≥ base. You use this fact to then prove P(k+1).', src: 'Induction Overview · S2' },
-];
+import { LearningService } from '../features/learning/learning.service';
 
 @Component({
   selector: 'app-review-tab',
@@ -36,6 +30,25 @@ const cards = [
   ],
   template: `
     <div class="flex flex-col items-center justify-start overflow-y-auto overflow-x-hidden" style="padding: 44px 56px 56px; gap: 32px">
+      @if (learningService.loading()) {
+        <div class="w-full max-w-[720px] flex flex-col gap-4" style="padding-top: 8px">
+          <div class="skeleton" style="height: 28px; width: 220px; border-radius: var(--r-md); background: var(--surface-sub)"></div>
+          <div class="skeleton" style="height: 300px; width: 100%; border-radius: var(--r-xl); background: var(--surface-sub)"></div>
+        </div>
+      } @else if (allCards().length === 0) {
+        <div class="flex flex-col items-center justify-center gap-5" style="min-height: 320px; max-width: 420px; text-align: center">
+          <div style="font-size: 15px; font-weight: 600; color: var(--ink-muted); line-height: 1.6">
+            No cards due right now. Create some flashcards to start reviewing.
+          </div>
+          <button
+            type="button"
+            style="font-size: 13px; padding: 10px 20px; border-radius: var(--r-lg); border: none; background: var(--navy); color: #fff; font-weight: 600; cursor: pointer; font-family: var(--font-display); box-shadow: var(--shadow-md)"
+            (click)="navigateToNotes()"
+          >
+            Go to Notes
+          </button>
+        </div>
+      } @else {
       <!-- Topbar -->
       <div class="w-full flex items-center justify-between gap-4 max-w-[720px]">
         <div>
@@ -60,7 +73,7 @@ const cards = [
           ></div>
         </div>
         <div class="flex justify-between mt-2.5" style="font-size: 12px; color: var(--ink-muted)">
-          <span>Card {{ cardIndex() + 1 }} of {{ totalCards }}</span>
+          <span>Card {{ cardIndex() + 1 }} of {{ totalCards() }}</span>
           <span>Est. {{ remaining() }} min remaining</span>
         </div>
       </div>
@@ -128,7 +141,7 @@ const cards = [
                   class="review-rating-btn flex-1 text-center cursor-pointer"
                   [class]="'review-rating-btn review-rating-btn--' + btn.className + ' flex-1 text-center cursor-pointer'"
                   [@staggerIn]="{ value: ':enter', params: { delay: btn.delay } }"
-                  (click)="handleNextCard()"
+                  (click)="handleRating(btn.confidence)"
                 >
                   {{ btn.label }}<br />
                   <span style="font-size: 10.5px; color: var(--ink-faint); font-weight: 500">{{ btn.sub }}</span>
@@ -169,10 +182,19 @@ const cards = [
           <div style="font-size: 9px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 3px; font-weight: 700">Confused</div>
         </div>
       </div>
+      }
     </div>
   `,
   styles: [`
     :host { display: flex; flex-direction: column; overflow: hidden; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .skeleton {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
 
     .review-progress-fill {
       transition: width 0.5s ease-out;
@@ -314,39 +336,105 @@ const cards = [
     }
   `],
 })
-export default class ReviewTabComponent {
-  private readonly router: Router;
+export default class ReviewTabComponent implements OnInit {
+  private readonly router = inject(Router);
+  protected readonly learningService = inject(LearningService);
+
+  readonly sessionId = signal(crypto.randomUUID());
+  readonly cardStartedAt = signal(Date.now());
 
   cardIndex = signal(0);
   revealed = signal(false);
   confused = signal(false);
-  stats = signal({ correct: 2, again: 1, confused: 3 });
+  stats = signal({ correct: 0, again: 0, confused: 0 });
   isCardHovered = signal(false);
 
-  totalCards = 12;
+  readonly allCards = computed(() => this.learningService.dueCards());
 
-  currentCard = computed(() => cards[this.cardIndex() % cards.length]);
-  progress = computed(() => ((this.cardIndex() + 1) / this.totalCards) * 100);
-  remaining = computed(() => Math.max(1, 12 - this.cardIndex()));
+  readonly totalCards = computed(() => this.allCards().length);
+
+  currentCard = computed(() => {
+    const list = this.allCards();
+    const i = this.cardIndex();
+    const d = list[i];
+    if (!d) {
+      return { q: '', a: '', src: '' };
+    }
+    return {
+      q: d.prompt,
+      a: d.answer,
+      src: d.topic_name || 'Review',
+    };
+  });
+
+  progress = computed(() => {
+    const t = this.totalCards();
+    if (!t) {
+      return 0;
+    }
+    return ((this.cardIndex() + 1) / t) * 100;
+  });
+
+  remaining = computed(() => {
+    const t = this.totalCards();
+    const idx = this.cardIndex();
+    return Math.max(1, Math.ceil((t - idx) * 0.5));
+  });
 
   ratingButtons = [
-    { label: '😌 Easy', sub: '+10 days', className: 'easy', delay: 0 },
-    { label: '👍 Good', sub: '+4 days', className: 'good', delay: 60 },
-    { label: '😬 Hard', sub: '+1 day', className: 'hard', delay: 120 },
-    { label: '🔁 Again', sub: '10 min', className: 'again', delay: 180 },
+    { label: '😌 Easy', sub: '+10 days', className: 'easy', delay: 0, confidence: 4 as const },
+    { label: '👍 Good', sub: '+4 days', className: 'good', delay: 60, confidence: 3 as const },
+    { label: '😬 Hard', sub: '+1 day', className: 'hard', delay: 120, confidence: 2 as const },
+    { label: '🔁 Again', sub: '10 min', className: 'again', delay: 180, confidence: 1 as const },
   ];
 
-  constructor(router: Router) {
-    this.router = router;
+  constructor() {
+    effect(() => {
+      this.cardIndex();
+      this.allCards();
+      this.cardStartedAt.set(Date.now());
+    });
+  }
+
+  ngOnInit(): void {
+    void this.learningService.loadDueCards(undefined, 20);
   }
 
   handleReveal(): void {
     this.revealed.set(true);
   }
 
-  handleNextCard(): void {
-    if (this.cardIndex() + 1 < this.totalCards) {
-      this.cardIndex.set(this.cardIndex() + 1);
+  async handleRating(confidence: number): Promise<void> {
+    const list = this.allCards();
+    const idx = this.cardIndex();
+    const row = list[idx];
+    if (!row) {
+      return;
+    }
+    const responseTimeMs = Math.max(0, Date.now() - this.cardStartedAt());
+    const correct = confidence >= 3;
+    const apiConfused = confidence === 1;
+    try {
+      await this.learningService.submitReview(
+        this.sessionId(),
+        row.flashcard_id,
+        correct,
+        confidence,
+        apiConfused,
+        responseTimeMs,
+      );
+    } catch {
+      return;
+    }
+
+    this.stats.update((s) => ({
+      correct: s.correct + (correct ? 1 : 0),
+      again: s.again + (confidence === 1 ? 1 : 0),
+      confused: s.confused + ((this.confused() || confidence === 1) ? 1 : 0),
+    }));
+
+    if (idx + 1 < list.length) {
+      this.cardIndex.set(idx + 1);
       this.revealed.set(false);
       this.confused.set(false);
     }
@@ -363,4 +451,5 @@ export default class ReviewTabComponent {
   navigateToNotes(): void {
     this.router.navigate(['/notes']);
   }
+
 }
