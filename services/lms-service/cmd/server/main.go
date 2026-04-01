@@ -14,6 +14,7 @@ import (
 
 	"github.com/shamshad-ansari/synapse/services/lms-service/internal/config"
 	"github.com/shamshad-ansari/synapse/services/lms-service/internal/repository"
+	"github.com/shamshad-ansari/synapse/services/lms-service/internal/sync"
 	router "github.com/shamshad-ansari/synapse/services/lms-service/internal/transport/http"
 )
 
@@ -59,8 +60,24 @@ func main() {
 	defer redisClient.Close()
 
 	lmsRepo := repository.NewPostgresLMSRepo(pool)
+	syncer := sync.NewSyncer(lmsRepo, logger, cfg.EncryptionKey)
+	schedulerCtx, schedulerCancel := context.WithCancel(context.Background())
+	defer schedulerCancel()
+	sync.StartScheduler(
+		schedulerCtx,
+		lmsRepo,
+		syncer,
+		logger,
+		time.Duration(cfg.SyncIntervalMinutes)*time.Minute,
+		time.Duration(cfg.SyncStartupDelaySec)*time.Second,
+		sync.SyncOptions{
+			InternalURL:        cfg.CanvasInternalURL,
+			CanvasClientID:     cfg.CanvasClientID,
+			CanvasClientSecret: cfg.CanvasClientSecret,
+		},
+	)
 
-	r := router.NewRouter(&cfg, pool, redisClient, logger, lmsRepo)
+	r := router.NewRouter(&cfg, pool, redisClient, logger, lmsRepo, syncer)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.HTTPPort,
@@ -83,6 +100,7 @@ func main() {
 	<-quit
 
 	logger.Info("shutdown signal received")
+	schedulerCancel()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
