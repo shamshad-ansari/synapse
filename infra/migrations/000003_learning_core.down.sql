@@ -1,0 +1,6 @@
+DROP TABLE IF EXISTS topic_mastery;
+DROP TABLE IF EXISTS review_events;
+DROP TABLE IF EXISTS scheduler_states;
+DROP TABLE IF EXISTS flashcards;
+DROP TABLE IF EXISTS topics;
+DROP TABLE IF EXISTS courses;
