@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
@@ -56,10 +56,30 @@ export interface GeneratedCardPayload {
 export interface NoteText {
   id: string;
   course_id: string;
+  topic_id: string | null;
   title: string;
   content: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface ConfusionInsight {
+  course_id: string | null;
+  course_name: string;
+  hotspot_count: number;
+  top_topic_name: string;
+  confused_events: number;
+  window_days: number;
+}
+
+export interface NoteMetric {
+  note_id: string;
+  readiness_pct: number;
+  connected_cards: number;
+  review_count: number;
+  confused_count: number;
+  confusion_flag: boolean;
+  last_review_at: string | null;
 }
 
 function pickStr(raw: Record<string, unknown>, ...keys: string[]): string {
@@ -164,10 +184,48 @@ function normalizeReviewResult(raw: Record<string, unknown>): ReviewResult {
   };
 }
 
+function normalizeNoteText(raw: Record<string, unknown>): NoteText {
+  const topic = raw['topic_id'] ?? raw['TopicID'];
+  return {
+    id: pickStr(raw, 'id', 'ID'),
+    course_id: pickStr(raw, 'course_id', 'CourseID'),
+    topic_id: topic === undefined || topic === null ? null : String(topic),
+    title: pickStr(raw, 'title', 'Title'),
+    content: pickStr(raw, 'content', 'Content'),
+    created_at: pickStr(raw, 'created_at', 'CreatedAt'),
+    updated_at: pickStr(raw, 'updated_at', 'UpdatedAt'),
+  };
+}
+
+function normalizeConfusionInsight(raw: Record<string, unknown>): ConfusionInsight {
+  return {
+    course_id: pickStrOrNull(raw, 'course_id', 'CourseID'),
+    course_name: pickStr(raw, 'course_name', 'CourseName'),
+    hotspot_count: pickNum(raw, 'hotspot_count', 'HotspotCount'),
+    top_topic_name: pickStr(raw, 'top_topic_name', 'TopTopicName'),
+    confused_events: pickNum(raw, 'confused_events', 'ConfusedEvents'),
+    window_days: pickNum(raw, 'window_days', 'WindowDays'),
+  };
+}
+
+function normalizeNoteMetric(raw: Record<string, unknown>): NoteMetric {
+  const lastReviewRaw = raw['last_review_at'] ?? raw['LastReviewAt'];
+  return {
+    note_id: pickStr(raw, 'note_id', 'NoteID'),
+    readiness_pct: Math.max(0, Math.min(100, Math.round(pickNum(raw, 'readiness_pct', 'ReadinessPct')))),
+    connected_cards: Math.max(0, Math.round(pickNum(raw, 'connected_cards', 'ConnectedCards'))),
+    review_count: Math.max(0, Math.round(pickNum(raw, 'review_count', 'ReviewCount'))),
+    confused_count: Math.max(0, Math.round(pickNum(raw, 'confused_count', 'ConfusedCount'))),
+    confusion_flag: Boolean(raw['confusion_flag'] ?? raw['ConfusionFlag']),
+    last_review_at: lastReviewRaw === undefined || lastReviewRaw === null ? null : String(lastReviewRaw),
+  };
+}
+
 @Injectable({ providedIn: 'root' })
 export class LearningService {
   private readonly http = inject(HttpClient);
   private readonly apiUrl = environment.apiUrl;
+  private readonly localNotesByCourse = new Map<string, NoteText[]>();
 
   readonly courses = signal<Course[]>([]);
   readonly flashcards = signal<Flashcard[]>([]);
@@ -179,6 +237,33 @@ export class LearningService {
   readonly generatedCards = signal<GeneratedCardPayload[]>([]);
   readonly generating = signal(false);
   readonly generationError = signal<string | null>(null);
+
+  readonly notes = signal<NoteText[]>([]);
+  readonly notesLoading = signal(false);
+  readonly activeNote = signal<NoteText | null>(null);
+  readonly noteSaving = signal(false);
+  readonly noteAiLoading = signal(false);
+  readonly noteAiAnswer = signal<string | null>(null);
+  readonly noteAiError = signal<string | null>(null);
+  readonly confusionInsight = signal<ConfusionInsight | null>(null);
+  readonly noteMetrics = signal<NoteMetric[]>([]);
+
+  private makeLocalNote(courseId: string, title: string, content: string, topicId?: string): NoteText {
+    const now = new Date().toISOString();
+    return {
+      id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+      course_id: courseId,
+      topic_id: topicId ?? null,
+      title,
+      content,
+      created_at: now,
+      updated_at: now,
+    };
+  }
+
+  private readLocalNotes(courseId: string): NoteText[] {
+    return this.localNotesByCourse.get(courseId) ?? [];
+  }
 
   async loadCourses(): Promise<void> {
     this.loading.set(true);
@@ -373,6 +458,182 @@ export class LearningService {
       this.generatedCards.set([]);
     } finally {
       this.generating.set(false);
+    }
+  }
+
+  async loadNotes(courseId: string): Promise<void> {
+    this.notesLoading.set(true);
+    try {
+      const res = await firstValueFrom(
+        this.http.get<{ data: unknown }>(`${this.apiUrl}/v1/courses/${courseId}/notes`),
+      );
+      const arr = Array.isArray(res.data) ? res.data : [];
+      const apiNotes = arr.map((x) => normalizeNoteText(asRecord(x)));
+      this.localNotesByCourse.set(courseId, apiNotes);
+      this.notes.set(apiNotes);
+    } catch {
+      this.notes.set(this.readLocalNotes(courseId));
+    } finally {
+      this.notesLoading.set(false);
+    }
+    await Promise.all([
+      this.loadConfusionInsight(courseId),
+      this.loadNoteMetrics(courseId),
+    ]);
+  }
+
+  async loadConfusionInsight(courseId?: string, windowDays = 14): Promise<void> {
+    try {
+      let params = new HttpParams().set('windowDays', String(windowDays));
+      if (courseId) {
+        params = params.set('courseId', courseId);
+      }
+      const res = await firstValueFrom(
+        this.http.get<{ data: unknown }>(`${this.apiUrl}/v1/insights/confusion`, { params }),
+      );
+      this.confusionInsight.set(normalizeConfusionInsight(asRecord(res.data)));
+    } catch {
+      this.confusionInsight.set(null);
+    }
+  }
+
+  async loadNoteMetrics(courseId: string, windowDays = 30): Promise<void> {
+    try {
+      const params = new HttpParams().set('windowDays', String(windowDays));
+      const res = await firstValueFrom(
+        this.http.get<{ data: unknown }>(`${this.apiUrl}/v1/courses/${courseId}/notes/metrics`, { params }),
+      );
+      const arr = Array.isArray(res.data) ? res.data : [];
+      this.noteMetrics.set(arr.map((x) => normalizeNoteMetric(asRecord(x))));
+    } catch {
+      this.noteMetrics.set([]);
+    }
+  }
+
+  async createNote(courseId: string, title: string, content: string, topicId?: string): Promise<NoteText> {
+    try {
+      const body: Record<string, unknown> = {
+        course_id: courseId,
+        title,
+        content,
+      };
+      if (topicId) {
+        body['topic_id'] = topicId;
+      }
+      const res = await firstValueFrom(
+        this.http.post<{ data: unknown }>(`${this.apiUrl}/v1/notes`, body),
+      );
+      const note = normalizeNoteText(asRecord(res.data));
+      this.notes.update((list) => [note, ...list]);
+      this.localNotesByCourse.set(courseId, this.notes());
+      await this.loadNoteMetrics(courseId);
+      return note;
+    } catch {
+      const note = this.makeLocalNote(courseId, title, content, topicId);
+      this.notes.update((list) => [note, ...list]);
+      this.localNotesByCourse.set(courseId, this.notes());
+      return note;
+    }
+  }
+
+  async updateNote(noteId: string, title: string, content: string, topicId?: string | null): Promise<void> {
+    this.noteSaving.set(true);
+    try {
+      const body: Record<string, unknown> = { title, content };
+      if (topicId) {
+        body['topic_id'] = topicId;
+      } else {
+        body['topic_id'] = null;
+      }
+      const res = await firstValueFrom(
+        this.http.put<{ data: unknown }>(`${this.apiUrl}/v1/notes/${noteId}`, body),
+      );
+      const updated = normalizeNoteText(asRecord(res.data));
+      this.notes.update((list) => list.map((n) => (n.id === noteId ? updated : n)));
+      if (this.activeNote()?.id === noteId) {
+        this.activeNote.set(updated);
+      }
+      this.localNotesByCourse.set(updated.course_id, this.notes());
+      await this.loadNoteMetrics(updated.course_id);
+    } catch {
+      let courseId = '';
+      this.notes.update((list) =>
+        list.map((n) => {
+          if (n.id !== noteId) {
+            return n;
+          }
+          courseId = n.course_id;
+          return {
+            ...n,
+            title,
+            content,
+            topic_id: topicId ?? null,
+            updated_at: new Date().toISOString(),
+          };
+        }),
+      );
+      const updatedLocal = this.notes().find((n) => n.id === noteId) ?? null;
+      if (updatedLocal && this.activeNote()?.id === noteId) {
+        this.activeNote.set(updatedLocal);
+      }
+      if (courseId) {
+        this.localNotesByCourse.set(courseId, this.notes());
+      }
+      if (courseId) {
+        await this.loadNoteMetrics(courseId);
+      }
+    } finally {
+      this.noteSaving.set(false);
+    }
+  }
+
+  async deleteNote(noteId: string): Promise<void> {
+    let courseId = '';
+    try {
+      await firstValueFrom(this.http.delete(`${this.apiUrl}/v1/notes/${noteId}`));
+    } catch {
+      // Continue and delete locally so the editor still works if notes API is unavailable.
+    } finally {
+      this.notes.update((list) =>
+        list.filter((n) => {
+          const keep = n.id !== noteId;
+          if (!keep) {
+            courseId = n.course_id;
+          }
+          return keep;
+        }),
+      );
+      if (this.activeNote()?.id === noteId) {
+        this.activeNote.set(null);
+      }
+      if (courseId) {
+        this.localNotesByCourse.set(courseId, this.notes());
+        await this.loadNoteMetrics(courseId);
+      }
+    }
+  }
+
+  async askNoteAI(noteId: string, question: string): Promise<void> {
+    this.noteAiLoading.set(true);
+    this.noteAiAnswer.set(null);
+    this.noteAiError.set(null);
+    try {
+      const res = await firstValueFrom(
+        this.http.post<{ data: { answer: string } }>(`${this.apiUrl}/v1/notes/${noteId}/ask`, {
+          question,
+        }),
+      );
+      this.noteAiAnswer.set(res.data?.answer ?? '');
+    } catch (err: unknown) {
+      const e = err as HttpErrorResponse & {
+        error?: { error?: string };
+      };
+      this.noteAiError.set(
+        e?.error?.error ?? e?.message ?? 'Failed to get AI response',
+      );
+      this.noteAiAnswer.set(null);
+    } finally {
+      this.noteAiLoading.set(false);
     }
   }
 
