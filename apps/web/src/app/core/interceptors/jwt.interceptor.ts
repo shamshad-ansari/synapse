@@ -9,7 +9,8 @@ export const jwtInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
   const token = authService.getAccessToken();
 
-  if (token && req.url.startsWith(environment.apiUrl)) {
+  const isApiUrl = req.url.startsWith(environment.apiUrl) || req.url.startsWith(environment.lmsApiUrl);
+  if (token && isApiUrl) {
     const shouldSkip = SKIP_PATHS.some(path => req.url.includes(path));
     if (!shouldSkip) {
       req = req.clone({
