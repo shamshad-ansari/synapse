@@ -1,5 +1,5 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -46,9 +46,8 @@ export class AuthService {
       this.storeTokens(res.data.access_token, res.data.refresh_token);
       this.currentUser.set(res.data.user);
       return res.data.user;
-    } catch (err: any) {
-      const msg = err?.error?.error ?? err?.message ?? 'Login failed';
-      this.error.set(msg);
+    } catch (err: unknown) {
+      this.error.set(this.apiErrorMessage(err, 'Login failed'));
       throw err;
     } finally {
       this.loading.set(false);
@@ -70,9 +69,8 @@ export class AuthService {
       this.storeTokens(res.data.access_token, res.data.refresh_token);
       this.currentUser.set(res.data.user);
       return res.data.user;
-    } catch (err: any) {
-      const msg = err?.error?.error ?? err?.message ?? 'Registration failed';
-      this.error.set(msg);
+    } catch (err: unknown) {
+      this.error.set(this.apiErrorMessage(err, 'Registration failed'));
       throw err;
     } finally {
       this.loading.set(false);
@@ -114,5 +112,25 @@ export class AuthService {
   private storeTokens(access: string, refresh: string): void {
     localStorage.setItem(ACCESS_TOKEN_KEY, access);
     localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
+  }
+
+  /** Parses api-gateway envelope { data, error } or network errors. */
+  private apiErrorMessage(err: unknown, fallback: string): string {
+    if (err instanceof HttpErrorResponse) {
+      const body = err.error;
+      if (body && typeof body === 'object' && 'error' in body) {
+        const e = (body as { error?: string | null }).error;
+        if (typeof e === 'string' && e.length > 0) {
+          return e;
+        }
+      }
+      if (err.status === 0) {
+        return 'Cannot reach the server. Is the API running and is apiUrl correct in environment?';
+      }
+      if (typeof err.message === 'string' && err.message.length > 0) {
+        return err.message;
+      }
+    }
+    return fallback;
   }
 }
