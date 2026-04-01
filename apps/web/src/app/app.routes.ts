@@ -15,5 +15,7 @@ export const routes: Routes = [
   { path: 'feed', title: 'Feed', loadComponent: () => import('./components/feed-tab.component'), canActivate: [authGuard] },
   { path: 'tutoring', title: 'Tutoring', loadComponent: () => import('./components/tutoring-tab.component'), canActivate: [authGuard] },
   { path: 'profile', title: 'Profile', loadComponent: () => import('./components/profile-tab.component'), canActivate: [authGuard] },
+  { path: 'canvas/connect', title: 'Connect Canvas — Synapse', loadComponent: () => import('./features/canvas/canvas-connect.page').then(m => m.CanvasConnectPage), canActivate: [authGuard] },
+  { path: 'canvas/connected', title: 'Connect Canvas — Synapse', loadComponent: () => import('./features/canvas/canvas-connect.page').then(m => m.CanvasConnectPage), canActivate: [authGuard] },
   { path: '**', redirectTo: '' },
 ];

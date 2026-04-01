@@ -55,7 +55,7 @@ export class AppComponent {
 
   protected readonly showDashboardShell = computed(() => {
     const url = this.currentUrl();
-    const fullscreenRoutes = ['/', '/login', '/register', '/canvas/connect'];
+    const fullscreenRoutes = ['/', '/login', '/register', '/canvas/connect', '/canvas/connected'];
     return !fullscreenRoutes.some(r => url === r || url.startsWith(r + '?'));
   });
 }
