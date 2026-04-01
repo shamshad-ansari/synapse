@@ -9,12 +9,13 @@ import (
 
 	"github.com/shamshad-ansari/synapse/services/lms-service/internal/config"
 	"github.com/shamshad-ansari/synapse/services/lms-service/internal/domain"
+	"github.com/shamshad-ansari/synapse/services/lms-service/internal/sync"
 	"github.com/shamshad-ansari/synapse/services/lms-service/internal/transport/http/handlers"
 	"github.com/shamshad-ansari/synapse/services/lms-service/internal/transport/http/middleware"
 )
 
 // NewRouter wires the chi router with all middlewares and routes.
-func NewRouter(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client, logger *zap.Logger, repo domain.LMSRepository) *chi.Mux {
+func NewRouter(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client, logger *zap.Logger, repo domain.LMSRepository, syncer *sync.Syncer) *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger(logger))
@@ -25,6 +26,7 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client, logger *
 	canvas := &handlers.CanvasHandler{
 		Cfg:    cfg,
 		Repo:   repo,
+		Syncer: syncer,
 		Redis:  rdb,
 		Logger: logger,
 	}
@@ -36,12 +38,16 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client, logger *
 		// OAuth callback — no JWT required (browser redirect from Canvas)
 		v1.Get("/lms/callback/canvas", canvas.CallbackCanvas)
 
+		// OAuth initiation — accepts JWT via ?token= query param (browser redirect)
+		v1.With(middleware.AllowQueryToken, middleware.RequireAuth(cfg.JWTSecret)).
+			Get("/lms/connect/canvas", canvas.ConnectCanvas)
+
 		v1.Group(func(protected chi.Router) {
 			protected.Use(middleware.RequireAuth(cfg.JWTSecret))
 
-			protected.Get("/lms/connect/canvas", canvas.ConnectCanvas)
 			protected.Post("/lms/connect/token", canvas.ConnectToken)
 			protected.Get("/lms/status", canvas.Status)
+			protected.Get("/lms/courses", canvas.ListSyncedCourses)
 			protected.Post("/lms/sync", canvas.Sync)
 			protected.Delete("/lms/disconnect", canvas.Disconnect)
 		})

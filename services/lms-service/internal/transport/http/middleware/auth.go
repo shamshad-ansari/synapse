@@ -18,6 +18,20 @@ const (
 	ctxKeySchoolID ctxKey = iota
 )
 
+// AllowQueryToken copies a ?token= query parameter into the Authorization
+// header when no header is present. This supports browser-redirect flows
+// (like OAuth initiation) where the frontend cannot set HTTP headers.
+func AllowQueryToken(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") == "" {
+			if token := r.URL.Query().Get("token"); token != "" {
+				r.Header.Set("Authorization", "Bearer "+token)
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // RequireAuth validates JWT access tokens issued by api-gateway,
 // extracts user_id and school_id claims, and injects them into context.
 func RequireAuth(jwtSecret string) func(http.Handler) http.Handler {
