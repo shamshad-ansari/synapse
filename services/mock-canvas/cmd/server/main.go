@@ -36,6 +36,10 @@ func main() {
 		_, _ = w.Write([]byte(`{"status":"ok","service":"mock-canvas"}`))
 	})
 
+	r.Get("/login/oauth2/auth", handlers.AuthorizePage)
+	r.Get("/login/oauth2/approve", handlers.ApproveAuthorization)
+	r.Post("/login/oauth2/token", handlers.TokenExchange)
+
 	r.Route("/api/v1", func(api chi.Router) {
 		api.Use(handlers.RequireToken)
 
@@ -44,6 +48,8 @@ func main() {
 		api.Get("/courses/{courseID}", handlers.GetCourse)
 		api.Get("/courses/{courseID}/assignments", handlers.ListAssignments)
 		api.Get("/courses/{courseID}/students/submissions", handlers.ListSubmissions)
+		api.Get("/courses/{courseID}/announcements", handlers.ListAnnouncements)
+		api.Get("/courses/{courseID}/discussion_topics", handlers.ListDiscussionTopics)
 	})
 
 	srv := &http.Server{
