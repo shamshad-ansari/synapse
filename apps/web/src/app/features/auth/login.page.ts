@@ -3,6 +3,7 @@ import { Router, RouterLink } from '@angular/router';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
 import { AuthService } from '../../core/auth/auth.service';
+import { CanvasService } from '../canvas/canvas.service';
 
 @Component({
   selector: 'app-login-page',
@@ -291,6 +292,7 @@ import { AuthService } from '../../core/auth/auth.service';
 })
 export class LoginPage {
   protected readonly authService = inject(AuthService);
+  private readonly canvasService = inject(CanvasService);
   private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
   private readonly destroyRef = inject(DestroyRef);
@@ -325,7 +327,12 @@ export class LoginPage {
     this.authService.error.set(null);
     try {
       await this.authService.login(email, password, school_domain);
-      this.router.navigate(['/today']);
+      await this.canvasService.loadStatus();
+      if (this.canvasService.status() === null) {
+        this.router.navigate(['/canvas/connect']);
+      } else {
+        this.router.navigate(['/today']);
+      }
     } catch {
       // error displayed via authService.error()
     }

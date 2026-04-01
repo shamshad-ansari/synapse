@@ -6,6 +6,7 @@ import {
 } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
 import { AuthService } from '../../core/auth/auth.service';
+import { CanvasService } from '../canvas/canvas.service';
 
 const passwordsMatch: ValidatorFn = (group: AbstractControl): ValidationErrors | null => {
   const pw = group.get('password')?.value;
@@ -351,6 +352,7 @@ const passwordsMatch: ValidatorFn = (group: AbstractControl): ValidationErrors |
 })
 export class RegisterPage {
   protected readonly authService = inject(AuthService);
+  private readonly canvasService = inject(CanvasService);
   private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
   private readonly destroyRef = inject(DestroyRef);
@@ -411,7 +413,12 @@ export class RegisterPage {
     this.authService.error.set(null);
     try {
       await this.authService.register(name, email, password, school_domain);
-      this.router.navigate(['/today']);
+      await this.canvasService.loadStatus();
+      if (this.canvasService.status() === null) {
+        this.router.navigate(['/canvas/connect']);
+      } else {
+        this.router.navigate(['/today']);
+      }
     } catch {
       // error displayed via authService.error()
     }
