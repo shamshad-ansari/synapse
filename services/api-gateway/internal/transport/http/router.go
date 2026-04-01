@@ -14,7 +14,7 @@ import (
 )
 
 // NewRouter wires the chi router with all middlewares and routes.
-func NewRouter(cfg *config.Config, db *pgxpool.Pool, logger *zap.Logger, authSvc service.AuthService) *chi.Mux {
+func NewRouter(cfg *config.Config, db *pgxpool.Pool, logger *zap.Logger, authSvc service.AuthService, learning *handlers.LearningHandler, autopilot *handlers.AutopilotHandler, aiHandler *handlers.AIHandler) *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger(logger))
@@ -35,6 +35,34 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool, logger *zap.Logger, authSvc
 		v1.Group(func(protected chi.Router) {
 			protected.Use(middleware.RequireAuth(cfg.JWTSecret))
 			protected.Get("/me", auth.Me)
+			protected.Get("/autopilot/today", autopilot.Today)
+
+			protected.Route("/courses", func(cr chi.Router) {
+				cr.Get("/", learning.ListCourses)
+				cr.Post("/", learning.CreateCourse)
+				cr.Post("/import-from-lms", learning.ImportFromLMS)
+				cr.Get("/{courseId}", learning.GetCourse)
+				cr.Delete("/{courseId}", learning.DeleteCourse)
+				cr.Get("/{courseId}/notes", learning.ListNotes)
+				cr.Get("/{courseId}/notes/metrics", learning.ListNoteMetrics)
+				cr.Get("/{courseId}/topics", learning.ListTopics)
+				cr.Post("/{courseId}/topics", learning.CreateTopic)
+				cr.Get("/{courseId}/flashcards", learning.ListFlashcards)
+			})
+			protected.Route("/notes", func(nr chi.Router) {
+				nr.Post("/", learning.CreateNote)
+				nr.Post("/{noteId}/ask", learning.AskNoteAI)
+				nr.Get("/{noteId}", learning.GetNote)
+				nr.Put("/{noteId}", learning.UpdateNote)
+				nr.Delete("/{noteId}", learning.DeleteNote)
+			})
+			protected.Post("/flashcards", learning.CreateFlashcard)
+			protected.Delete("/flashcards/{cardId}", learning.DeleteFlashcard)
+			protected.Get("/review/due", learning.GetDueCards)
+			protected.Post("/review/events", learning.SubmitReview)
+			protected.Get("/insights/confusion", learning.GetConfusionInsights)
+			protected.Post("/flashcards/generate", aiHandler.GenerateFlashcards)
+			protected.Post("/flashcards/generate/accept", aiHandler.AcceptGeneratedFlashcards)
 		})
 	})
 

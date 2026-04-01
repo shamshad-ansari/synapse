@@ -12,9 +12,11 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
+	"github.com/shamshad-ansari/synapse/services/api-gateway/internal/ai"
 	"github.com/shamshad-ansari/synapse/services/api-gateway/internal/config"
 	"github.com/shamshad-ansari/synapse/services/api-gateway/internal/repository"
 	"github.com/shamshad-ansari/synapse/services/api-gateway/internal/service"
+	"github.com/shamshad-ansari/synapse/services/api-gateway/internal/transport/http/handlers"
 	router "github.com/shamshad-ansari/synapse/services/api-gateway/internal/transport/http"
 )
 
@@ -62,9 +64,34 @@ func main() {
 	defer redisClient.Close()
 
 	userRepo := repository.NewPostgresUserRepo(pool)
+	learningRepo := repository.NewPostgresLearningRepo(pool)
 	authSvc := service.NewAuthService(userRepo, &cfg)
+	learningSvc := service.NewLearningService(learningRepo)
+	autopilot := &handlers.AutopilotHandler{DB: pool}
 
-	r := router.NewRouter(&cfg, pool, logger, authSvc)
+	gen := newFlashcardGenerator(&cfg)
+	emb := newTextEmbedder(&cfg)
+	if gen == nil || emb == nil {
+		logger.Warn("AI flashcard generation disabled: set AI_GENERATION_PROVIDER and AI_EMBEDDING_PROVIDER with matching API keys (see .env.example). " +
+			"Do not switch embedding providers in production without re-embedding stored vectors.")
+	}
+
+	noteAI := newNoteAI(&cfg)
+
+	learningH := &handlers.LearningHandler{
+		Service:  learningSvc,
+		Repo:     learningRepo,
+		Embed:    emb,
+		AIClient: noteAI,
+	}
+
+	var aiSvc *service.AIService
+	if gen != nil && emb != nil {
+		aiSvc = service.NewAIService(learningRepo, gen, emb, logger)
+	}
+	aiHandler := &handlers.AIHandler{AIService: aiSvc}
+
+	r := router.NewRouter(&cfg, pool, logger, authSvc, learningH, autopilot, aiHandler)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.HTTPPort,
@@ -95,4 +122,55 @@ func main() {
 		logger.Error("graceful shutdown failed", zap.Error(err))
 	}
 	logger.Info("server stopped")
+}
+
+func newFlashcardGenerator(cfg *config.Config) ai.FlashcardGenerator {
+	switch cfg.AIGenerationProvider {
+	case "anthropic":
+		if cfg.AnthropicAPIKey == "" {
+			return nil
+		}
+		return ai.NewAnthropicClient(cfg.AnthropicAPIKey)
+	case "gemini":
+		if cfg.GeminiAPIKey == "" {
+			return nil
+		}
+		return ai.NewGeminiClient(cfg.GeminiAPIKey, cfg.GeminiModel)
+	default:
+		return nil
+	}
+}
+
+func newTextEmbedder(cfg *config.Config) ai.TextEmbedder {
+	switch cfg.AIEmbeddingProvider {
+	case "openai":
+		if cfg.OpenAIAPIKey == "" {
+			return nil
+		}
+		return ai.NewOpenAIEmbedClient(cfg.OpenAIAPIKey)
+	case "gemini":
+		if cfg.GeminiAPIKey == "" {
+			return nil
+		}
+		return ai.NewGeminiEmbedClient(cfg.GeminiAPIKey, cfg.GeminiEmbeddingModel)
+	default:
+		return nil
+	}
+}
+
+func newNoteAI(cfg *config.Config) ai.Completer {
+	switch cfg.AIGenerationProvider {
+	case "anthropic":
+		if cfg.AnthropicAPIKey == "" {
+			return nil
+		}
+		return ai.NewAnthropicClient(cfg.AnthropicAPIKey)
+	case "gemini":
+		if cfg.GeminiAPIKey == "" {
+			return nil
+		}
+		return ai.NewGeminiClient(cfg.GeminiAPIKey, cfg.GeminiModel)
+	default:
+		return nil
+	}
 }
