@@ -1,4 +1,4 @@
-import { Component, signal, computed, inject, effect, OnInit } from '@angular/core';
+import { Component, signal, computed, inject, effect, OnInit, HostListener } from '@angular/core';
 import { Router } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { trigger, transition, style, animate, query, stagger } from '@angular/animations';
@@ -49,6 +49,59 @@ import { LearningService } from '../features/learning/learning.service';
           </button>
         </div>
       } @else {
+      @if (sessionDone()) {
+        <!-- Session Complete screen -->
+        <div class="flex flex-col items-center gap-8" style="max-width: 480px; text-align: center; padding-top: 40px">
+          <div style="font-size: 48px">🎉</div>
+          <div>
+            <div style="font-size: 28px; font-weight: 700; letter-spacing: -0.6px; font-family: var(--font-display); color: var(--ink); margin-bottom: 8px">
+              Session Complete
+            </div>
+            <div style="font-size: 14px; color: var(--ink-muted); line-height: 1.7">
+              {{ totalCards() }} cards reviewed. Your mastery model has been updated.
+            </div>
+          </div>
+          <!-- Stats row -->
+          <div class="flex gap-6">
+            <div class="text-center">
+              <div style="font-size: 32px; font-weight: 800; font-family: var(--font-display); color: var(--emerald)">{{ stats().correct }}</div>
+              <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ink-faint); font-weight: 700; margin-top: 4px">Correct</div>
+            </div>
+            <div class="text-center">
+              <div style="font-size: 32px; font-weight: 800; font-family: var(--font-display); color: var(--red)">{{ stats().again }}</div>
+              <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ink-faint); font-weight: 700; margin-top: 4px">Again</div>
+            </div>
+            <div class="text-center">
+              <div style="font-size: 32px; font-weight: 800; font-family: var(--font-display); color: var(--amber)">{{ stats().confused }}</div>
+              <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ink-faint); font-weight: 700; margin-top: 4px">Confused</div>
+            </div>
+          </div>
+          <!-- Accuracy pill -->
+          <div
+            style="padding: 8px 20px; border-radius: var(--r-xl); font-size: 14px; font-weight: 700; font-family: var(--font-display)"
+            [style.background]="accuracy() >= 70 ? 'var(--emerald-light)' : 'var(--red-light)'"
+            [style.color]="accuracy() >= 70 ? 'var(--emerald)' : 'var(--red)'"
+            [style.border]="'1px solid ' + (accuracy() >= 70 ? 'var(--emerald-border)' : 'var(--red-border)')"
+          >
+            {{ accuracy() }}% accuracy
+          </div>
+          <!-- Buttons -->
+          <div class="flex gap-3">
+            <button
+              style="font-size: 13px; padding: 10px 24px; border-radius: var(--r-lg); border: 1px solid var(--divider); background: transparent; color: var(--ink-2); font-weight: 600; cursor: pointer; transition: var(--transition-base)"
+              (click)="navigateToToday()"
+            >
+              Back to Today
+            </button>
+            <button
+              style="font-size: 13px; padding: 10px 24px; border-radius: var(--r-lg); border: none; background: var(--navy); color: #fff; font-weight: 600; cursor: pointer; font-family: var(--font-display); box-shadow: var(--shadow-sm); transition: var(--transition-base)"
+              (click)="reviewAgain()"
+            >
+              Review Again
+            </button>
+          </div>
+        </div>
+      } @else {
       <!-- Topbar -->
       <div class="w-full flex items-center justify-between gap-4 max-w-[720px]">
         <div>
@@ -78,43 +131,54 @@ import { LearningService } from '../features/learning/learning.service';
         </div>
       </div>
 
-      <!-- Flashcard -->
+      <!-- Flashcard with 3D Flip -->
       <div class="w-full max-w-[720px]" [@cardSwap]="cardIndex()">
-        <div
-          class="review-card w-full text-center"
-          [class.review-card--unrevealed]="!revealed()"
-          [style.border-color]="isCardHovered() && !revealed() ? 'var(--emerald)' : 'var(--divider)'"
-          [style.box-shadow]="isCardHovered() ? 'var(--shadow-lg)' : 'var(--shadow-md)'"
-          (click)="!revealed() ? handleReveal() : null"
-          (mouseenter)="isCardHovered.set(true)"
-          (mouseleave)="isCardHovered.set(false)"
-        >
-          <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--ink-faint); font-family: var(--mono); font-weight: 700">
-            Recall
-          </div>
-          <div class="flex items-center gap-2" style="font-size: 12.5px; color: var(--navy); font-weight: 600">
-            <lucide-icon name="book-open" [size]="15" [strokeWidth]="2" /> Induction · CS225
-          </div>
-          <div style="font-family: var(--font); font-size: 21px; font-weight: 500; line-height: 1.5; max-width: 560px; color: var(--ink)">
-            {{ currentCard().q }}
-          </div>
-          @if (revealed()) {
+        <div class="flip-card" [class.is-flipped]="revealed()">
+          <div class="flip-card-inner">
+            <!-- Front Face -->
             <div
-              @fadeInUp
-              style="font-family: var(--font); font-size: 15.5px; color: var(--ink-2); line-height: 1.7; max-width: 560px; font-weight: 400; border-top: 1px solid var(--divider); padding-top: 18px"
+              class="review-card flip-card-front"
+              [class.review-card--unrevealed]="!revealed()"
+              (click)="handleReveal()"
+              (mouseenter)="isCardHovered.set(true)"
+              (mouseleave)="isCardHovered.set(false)"
             >
-              {{ currentCard().a }}
+              <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--ink-faint); font-family: var(--mono); font-weight: 700">
+                Recall
+              </div>
+              <div class="flex items-center gap-2" style="font-size: 12.5px; color: var(--navy); font-weight: 600">
+                <lucide-icon name="book-open" [size]="15" [strokeWidth]="2" /> {{ currentCard().src }}
+              </div>
+              <div style="font-family: var(--font); font-size: 24px; font-weight: 500; line-height: 1.5; max-width: 560px; color: var(--ink); margin-top: 20px">
+                {{ currentCard().q }}
+              </div>
+              <div style="font-size: 13px; color: var(--ink-faint); margin-top: 40px; font-weight: 500">
+                Click or press Space to reveal
+              </div>
             </div>
-          }
-          @if (!revealed()) {
-            <div style="font-size: 12.5px; color: var(--ink-faint)">Click anywhere to reveal answer</div>
-          }
-          <a
-            class="review-source-link flex items-center gap-1.5 cursor-pointer transition-all"
-            (click)="$event.stopPropagation(); navigateToNotes()"
-          >
-            <lucide-icon name="file-text" [size]="14" [strokeWidth]="2" /> Source: {{ currentCard().src }}
-          </a>
+
+            <!-- Back Face -->
+            <div class="review-card flip-card-back">
+              <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--ink-faint); font-family: var(--mono); font-weight: 700">
+                Answer
+              </div>
+              <div class="flex items-center gap-2" style="font-size: 12.5px; color: var(--emerald); font-weight: 600">
+                <lucide-icon name="check-circle" [size]="15" [strokeWidth]="2" /> Correct Response
+              </div>
+              <div
+                style="font-family: var(--font); font-size: 18px; color: var(--ink); line-height: 1.7; max-width: 560px; font-weight: 400; margin-top: 20px"
+              >
+                {{ currentCard().a }}
+              </div>
+              <a
+                class="review-source-link flex items-center gap-1.5 cursor-pointer transition-all"
+                style="margin-top: 40px"
+                (click)="$event.stopPropagation(); navigateToNotes()"
+              >
+                <lucide-icon name="file-text" [size]="14" [strokeWidth]="2" /> Source: {{ currentCard().src }}
+              </a>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -183,6 +247,7 @@ import { LearningService } from '../features/learning/learning.service';
         </div>
       </div>
       }
+      }
     </div>
   `,
   styles: [`
@@ -220,15 +285,53 @@ import { LearningService } from '../features/learning/learning.service';
       border: 1px solid var(--divider);
       border-radius: var(--r-xl);
       padding: 56px 52px;
-      min-height: 300px;
+      min-height: 420px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 18px;
-      background: var(--card-bg);
+      gap: 12px;
+      background: var(--bg);
       box-shadow: var(--shadow-md);
-      transition: all var(--transition-base);
+      transition: all 400ms cubic-bezier(0.23, 1, 0.32, 1);
+      text-align: center;
+      position: relative;
+    }
+    
+    .flip-card {
+      background-color: transparent;
+      width: 100%;
+      height: 420px;
+      perspective: 1500px;
+    }
+
+    .flip-card-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      text-align: center;
+      transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+      transform-style: preserve-3d;
+    }
+
+    .flip-card.is-flipped .flip-card-inner {
+      transform: rotateY(180deg);
+    }
+
+    .flip-card-front, .flip-card-back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      -webkit-backface-visibility: hidden;
+      backface-visibility: hidden;
+      top: 0;
+      left: 0;
+    }
+
+    .flip-card-back {
+      transform: rotateY(180deg);
+      background: var(--surface-sub);
+      border-color: var(--emerald-border);
     }
     .review-card--unrevealed {
       cursor: pointer;
@@ -348,6 +451,7 @@ export default class ReviewTabComponent implements OnInit {
   confused = signal(false);
   stats = signal({ correct: 0, again: 0, confused: 0 });
   isCardHovered = signal(false);
+  readonly sessionDone = signal(false);
 
   readonly allCards = computed(() => this.learningService.dueCards());
 
@@ -379,6 +483,12 @@ export default class ReviewTabComponent implements OnInit {
     const t = this.totalCards();
     const idx = this.cardIndex();
     return Math.max(1, Math.ceil((t - idx) * 0.5));
+  });
+
+  readonly accuracy = computed(() => {
+    const total = this.stats().correct + this.stats().again;
+    if (!total) return 0;
+    return Math.round((this.stats().correct / total) * 100);
   });
 
   ratingButtons = [
@@ -413,7 +523,7 @@ export default class ReviewTabComponent implements OnInit {
     }
     const responseTimeMs = Math.max(0, Date.now() - this.cardStartedAt());
     const correct = confidence >= 3;
-    const apiConfused = confidence === 1;
+    const apiConfused = this.confused() || confidence === 1;
     try {
       await this.learningService.submitReview(
         this.sessionId(),
@@ -437,6 +547,8 @@ export default class ReviewTabComponent implements OnInit {
       this.cardIndex.set(idx + 1);
       this.revealed.set(false);
       this.confused.set(false);
+    } else {
+      this.sessionDone.set(true);
     }
   }
 
@@ -450,6 +562,29 @@ export default class ReviewTabComponent implements OnInit {
 
   navigateToNotes(): void {
     this.router.navigate(['/notes']);
+  }
+
+  reviewAgain(): void {
+    this.cardIndex.set(0);
+    this.revealed.set(false);
+    this.confused.set(false);
+    this.sessionId.set(crypto.randomUUID());
+    this.stats.set({ correct: 0, again: 0, confused: 0 });
+    this.sessionDone.set(false);
+    void this.learningService.loadDueCards(undefined, 20);
+  }
+
+  @HostListener('window:keydown', ['$event'])
+  handleKeyboard(event: KeyboardEvent) {
+    if (event.code === 'Space' && !this.revealed()) {
+      event.preventDefault();
+      this.handleReveal();
+    } else if (this.revealed()) {
+      if (event.key === '1') this.handleRating(1);
+      if (event.key === '2') this.handleRating(2);
+      if (event.key === '3') this.handleRating(3);
+      if (event.key === '4') this.handleRating(4);
+    }
   }
 
 }
