@@ -1,4 +1,4 @@
-import { Component, inject, model, signal, computed, HostListener } from '@angular/core';
+import { Component, inject, model, signal, computed, HostListener, OnInit } from '@angular/core';
 import { Router, RouterLink, NavigationEnd } from '@angular/router';
 import { NgTemplateOutlet } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -6,6 +6,7 @@ import { filter, map } from 'rxjs';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { LucideAngularModule } from 'lucide-angular';
 import { AuthService } from '../core/auth/auth.service';
+import { LearningService } from '../features/learning/learning.service';
 
 interface NavItem {
   icon: string;
@@ -132,7 +133,7 @@ interface NavSection {
       </ng-template>
 
       <!-- Sections -->
-      @for (section of sections; track section.header) {
+      @for (section of sections(); track section.header) {
         @if (isOpen()) {
           <div
             @sectionSlide
@@ -304,13 +305,20 @@ interface NavSection {
     }
   `],
 })
-export class SidebarComponent {
+export class SidebarComponent implements OnInit {
   readonly isOpen = model(true);
 
   private readonly router = inject(Router);
   private readonly authService = inject(AuthService);
+  private readonly learningService = inject(LearningService);
 
   protected readonly showUserMenu = signal(false);
+
+  protected readonly dueCount = computed(() => this.learningService.dueCards().length);
+
+  ngOnInit() {
+    this.learningService.loadDueCards();
+  }
 
   protected readonly userName = computed(() =>
     this.authService.currentUser()?.name ?? 'Loading...',
@@ -318,7 +326,7 @@ export class SidebarComponent {
 
   protected readonly userSchool = computed(() => {
     const user = this.authService.currentUser();
-    return user?.school_id ? 'School' : 'School';
+    return user ? 'University' : '';
   });
 
   protected readonly userInitials = computed(() => {
@@ -338,14 +346,19 @@ export class SidebarComponent {
     { initialValue: this.router.url },
   );
 
-  protected readonly sections: NavSection[] = [
+  protected readonly sections = computed<NavSection[]>(() => [
     {
       header: 'Learning',
       pushDown: false,
       items: [
         { icon: 'home', label: 'Today', route: '/today' },
         { icon: 'file-text', label: 'Notes', route: '/notes' },
-        { icon: 'zap', label: 'Review', route: '/review', badge: '12' },
+        {
+          icon: 'zap',
+          label: 'Review',
+          route: '/review',
+          badge: this.dueCount() > 0 ? String(this.dueCount()) : undefined
+        },
         { icon: 'calendar', label: 'Planner', route: '/planner' },
       ],
     },
@@ -357,7 +370,7 @@ export class SidebarComponent {
         { icon: 'users', label: 'Tutoring', route: '/tutoring' },
       ],
     },
-  ];
+  ]);
 
   protected isActive(route: string): boolean {
     return this.currentUrl()?.startsWith(route) ?? false;

@@ -1,5 +1,6 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, computed, inject } from '@angular/core';
 import { LucideAngularModule } from 'lucide-angular';
+import { AuthService } from '../core/auth/auth.service';
 
 @Component({
   selector: 'app-profile-tab',
@@ -41,11 +42,11 @@ import { LucideAngularModule } from 'lucide-angular';
           class="flex items-center justify-center"
           style="width: 72px; height: 72px; border-radius: 50%; background: var(--navy); font-size: 26px; font-weight: 700; color: #fff; flex-shrink: 0"
         >
-          AK
+          {{ userInitials() }}
         </div>
         <div class="flex-1">
-          <div style="font-size: 24px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 4px; color: var(--ink)">Alex Kim</div>
-          <div style="font-size: 13.5px; color: var(--ink-muted); margin-bottom: 12px">MIT · Computer Science · Year 2</div>
+          <div style="font-size: 24px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 4px; color: var(--ink)">{{ displayName() }}</div>
+          <div style="font-size: 13.5px; color: var(--ink-muted); margin-bottom: 12px">{{ userSubline() }}</div>
           <div class="flex gap-1.5 flex-wrap">
             @for (pill of pills; track pill.text) {
               <span
@@ -198,6 +199,19 @@ import { LucideAngularModule } from 'lucide-angular';
   `,
 })
 export default class ProfileTabComponent {
+  private readonly authService = inject(AuthService);
+
+  protected readonly displayName = computed(() =>
+    this.authService.currentUser()?.name ?? 'Student',
+  );
+  protected readonly userInitials = computed(() => {
+    const name = this.authService.currentUser()?.name;
+    if (!name) return '??';
+    const parts = name.trim().split(/\s+/);
+    return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+  });
+  protected readonly userSubline = computed(() => 'University');
+
   toggles = signal<{ mastery: boolean; global: boolean; feed: boolean }>({
     mastery: true,
     global: true,

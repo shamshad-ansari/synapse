@@ -571,7 +571,7 @@ export default class TodayTabComponent implements OnInit {
 
   private readonly statsWithDue = computed(() =>
     this.todayService.stats().map((s) =>
-      s.label === 'Due' ? { ...s, value: `${this.todayService.dueCardCount()} Due` } : s,
+      s.label === 'Due' ? { ...s, value: String(this.todayService.dueCardCount()) } : s,
     ),
   );
 
