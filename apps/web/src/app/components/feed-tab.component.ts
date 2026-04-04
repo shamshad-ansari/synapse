@@ -1,24 +1,10 @@
-import { Component, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { Router } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { trigger, transition, style, animate } from '@angular/animations';
-
-interface Post {
-  avatar: string;
-  author: string;
-  reputation: number;
-  school: string;
-  time: string;
-  topic: string;
-  title: string;
-  body: string;
-  upvotes: number;
-  upvoted: boolean;
-  comments: number;
-  rankingReason: string;
-  provenanceLink: string;
-  avatarColor: string;
-}
+import { AuthService } from '../core/auth/auth.service';
+import { LearningService } from '../features/learning/learning.service';
+import { FeedService, type FeedPost } from '../features/feed/feed.service';
 
 @Component({
   selector: 'app-feed-tab',
@@ -46,12 +32,55 @@ interface Post {
           <div style="font-size: 13.5px; color: var(--ink-muted); margin-top: 4px">Intelligence-ranked learning insights from your cohort</div>
         </div>
         <button
+          type="button"
           class="post-btn flex items-center gap-2 transition-all"
           style="font-size: 13px; padding: 8px 16px; border-radius: var(--r-lg); border: none; background: var(--navy); color: #fff; font-weight: 600; cursor: pointer; box-shadow: var(--shadow-sm); transition: var(--transition-base)"
+          (click)="showPostForm.update(v => !v)"
         >
           <lucide-icon name="plus" [size]="15" [strokeWidth]="2" /> Post
         </button>
       </div>
+
+      @if (showPostForm()) {
+        <div
+          style="border: 1px solid var(--divider); border-radius: var(--r-xl); padding: 20px 22px; background: var(--card-bg); box-shadow: var(--shadow-sm)"
+        >
+          <div style="font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 12px; font-family: var(--font-display)">New post</div>
+          <label class="block" style="margin-bottom: 10px">
+            <span style="font-size: 11px; font-weight: 600; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em">Title</span>
+            <input
+              type="text"
+              [value]="newPostTitle()"
+              (input)="onNewTitle($event)"
+              placeholder="What's this about?"
+              style="display: block; width: 100%; margin-top: 6px; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--divider); font-size: 14px; font-family: var(--font); background: var(--bg); color: var(--ink)"
+            />
+          </label>
+          <label class="block" style="margin-bottom: 14px">
+            <span style="font-size: 11px; font-weight: 600; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.04em">Body</span>
+            <textarea
+              [value]="newPostBody()"
+              (input)="onNewBody($event)"
+              rows="4"
+              placeholder="Share details, context, or questions…"
+              style="display: block; width: 100%; margin-top: 6px; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--divider); font-size: 14px; font-family: var(--font); background: var(--bg); color: var(--ink); resize: vertical; min-height: 96px"
+            ></textarea>
+          </label>
+          <div class="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              style="font-size: 13px; padding: 8px 14px; border-radius: var(--r-md); border: 1px solid var(--divider); background: transparent; color: var(--ink-muted); font-weight: 600; cursor: pointer"
+              (click)="showPostForm.set(false)"
+            >Cancel</button>
+            <button
+              type="button"
+              style="font-size: 13px; padding: 8px 16px; border-radius: var(--r-md); border: none; background: var(--navy); color: #fff; font-weight: 600; cursor: pointer"
+              [disabled]="feedService.posting()"
+              (click)="onSubmitPost()"
+            >{{ feedService.posting() ? 'Posting…' : 'Publish' }}</button>
+          </div>
+        </div>
+      }
 
       <!-- Narrated Feed Header - Synapse Intelligence -->
       <div
@@ -60,7 +89,11 @@ interface Post {
       >
         <div class="pulse-dot"></div>
         <div style="font-size: 13px; color: var(--ink-2); line-height: 1.6; font-weight: 500">
-          <strong style="color: var(--ink); font-family: var(--font-display)">Alex</strong>, this feed is ranked by your confusion hotspots in <strong style="color: var(--emerald)">Recursion</strong> and a missed review session from yesterday.
+          <strong style="color: var(--ink); font-family: var(--font-display)">{{ firstName() }}</strong>, this feed is ranked by your confusion hotspots
+          @if (topWeakTopic()) {
+            in <strong style="color: var(--emerald)">{{ topWeakTopic() }}</strong>
+          }
+          and your recent study activity.
         </div>
       </div>
 
@@ -92,9 +125,19 @@ interface Post {
         >Global Network</div>
       </div>
 
+      <!-- Loading skeleton -->
+      @if (feedService.loading() && posts().length === 0) {
+        <div class="flex flex-col gap-5">
+          @for (_ of [1, 2, 3]; track _) {
+            <div class="skeleton" style="height: 160px; border-radius: var(--r-xl); background: var(--surface-sub)"></div>
+          }
+        </div>
+      }
+
       <!-- Posts -->
+      @if (!(feedService.loading() && posts().length === 0)) {
       <div class="flex flex-col gap-5">
-        @for (post of posts; track post.author; let i = $index) {
+        @for (post of posts(); track post.id; let i = $index) {
           <div
             class="post-card cursor-pointer"
             style="border: 1px solid var(--divider); border-radius: var(--r-xl); padding: 24px 28px; background: var(--card-bg); box-shadow: var(--shadow-sm); transition: all var(--transition-base)"
@@ -104,36 +147,21 @@ interface Post {
               <div
                 class="flex items-center justify-center"
                 style="width: 34px; height: 34px; border-radius: 50%; font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0"
-                [style.background]="post.avatarColor"
-              >{{ post.avatar }}</div>
+                [style.background]="avatarColorForName(post.author_name)"
+              >{{ authorInitials(post.author_name) }}</div>
               <div class="flex-1">
                 <div class="flex items-center gap-2">
-                  <span style="font-size: 14px; font-weight: 600; color: var(--ink)">{{ post.author }}</span>
-                  <div
-                    class="reputation-badge flex items-center gap-1"
-                    style="font-size: 11px; font-weight: 700; font-family: var(--mono); color: var(--emerald); background: var(--emerald-light); border: 1px solid var(--emerald-border); padding: 2px 7px; border-radius: 12px; transition: transform 0.15s ease"
-                  >
-                    <lucide-icon name="arrow-up" [size]="10" [strokeWidth]="3" /> {{ post.reputation }}
-                  </div>
+                  <span style="font-size: 14px; font-weight: 600; color: var(--ink)">{{ post.author_name }}</span>
                 </div>
-                <div style="font-size: 12px; color: var(--ink-muted); margin-top: 2px">{{ post.school }} · {{ post.time }}</div>
+                <div style="font-size: 12px; color: var(--ink-muted); margin-top: 2px">{{ formatFeedTime(post.created_at) }}</div>
               </div>
               <!-- Topic Tag -->
-              <div style="font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: var(--r-md); background: var(--navy-light); color: var(--navy); border: 1px solid var(--navy-border); white-space: nowrap">{{ post.topic }}</div>
+              <div style="font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: var(--r-md); background: var(--navy-light); color: var(--navy); border: 1px solid var(--navy-border); white-space: nowrap">{{ formatPostType(post.post_type) }}</div>
             </div>
 
             <!-- Content -->
             <div style="font-size: 16px; font-weight: 600; letter-spacing: -0.3px; margin-bottom: 10px; color: var(--ink); font-family: var(--font-display)">{{ post.title }}</div>
             <div style="font-family: var(--serif); font-size: 14px; color: var(--ink-muted); line-height: 1.75; margin-bottom: 16px; font-weight: 300">{{ post.body }}</div>
-
-            <!-- Provenance Link -->
-            <div
-              class="provenance-link inline-flex items-center gap-1.5 cursor-pointer"
-              style="font-size: 11.5px; color: var(--ink-faint); background: var(--surface-sub); border: 1px solid var(--divider); padding: 4px 10px; border-radius: var(--r-md); margin-bottom: 16px; transition: var(--transition-fast)"
-              (click)="navigateToNotes($event)"
-            >
-              <lucide-icon name="link" [size]="12" [strokeWidth]="2" /> Provenance: {{ post.provenanceLink }}
-            </div>
 
             <!-- Actions -->
             <div
@@ -151,6 +179,7 @@ interface Post {
                 [style.background]="post.upvoted ? 'var(--navy-light)' : 'transparent'"
                 [style.border]="post.upvoted ? '1px solid var(--navy-border)' : '1px solid transparent'"
                 style="transition: all var(--transition-fast)"
+                (click)="toggleUpvote(i); $event.stopPropagation()"
               >
                 <lucide-icon name="arrow-up" [size]="14" [strokeWidth]="2" /> {{ post.upvotes }}
               </div>
@@ -159,7 +188,7 @@ interface Post {
                 class="action-btn flex items-center gap-1.5 cursor-pointer"
                 style="font-size: 12.5px; color: var(--ink-muted); padding: 6px 11px; border-radius: var(--r-md); font-weight: 500; transition: all var(--transition-fast)"
               >
-                <lucide-icon name="message-circle" [size]="14" [strokeWidth]="2" /> {{ post.comments }}
+                <lucide-icon name="message-circle" [size]="14" [strokeWidth]="2" /> 0
               </div>
               <!-- Bookmark -->
               <div
@@ -169,7 +198,8 @@ interface Post {
                 <lucide-icon name="bookmark" [size]="14" [strokeWidth]="2" /> Save
               </div>
 
-              <!-- Why this ranked? -->
+              @if (false) {
+              <!-- Why this ranked? — hidden until API provides ranking metadata -->
               <div
                 class="ranking-btn ml-auto flex items-center gap-1.5 cursor-pointer"
                 [style.font-size]="'11.5px'"
@@ -192,18 +222,22 @@ interface Post {
                   [style.transform]="isRankingExpanded(i) ? 'rotate(180deg)' : 'rotate(0)'"
                 />
               </div>
+              }
             </div>
 
+            @if (false) {
             <!-- Ranking Explanation -->
             @if (isRankingExpanded(i)) {
               <div
                 @expandCollapse
                 style="margin-top: 12px; padding: 14px 16px; border-radius: var(--r-lg); background: var(--surface-sub); border: 1px solid var(--divider); font-size: 12.5px; color: var(--ink-2); line-height: 1.7; overflow: hidden"
-              >{{ post.rankingReason }}</div>
+              ></div>
+            }
             }
           </div>
         }
       </div>
+      }
     </div>
   `,
   styles: [`
@@ -269,67 +303,133 @@ interface Post {
       transition: transform 0.2s ease;
       display: inline-flex;
     }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .skeleton {
+      background: var(--surface-sub);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
   `],
 })
-export default class FeedTabComponent {
-  private readonly router: Router;
+export default class FeedTabComponent implements OnInit {
+  private readonly router = inject(Router);
+  private readonly authService = inject(AuthService);
+  private readonly learningService = inject(LearningService);
+  readonly feedService = inject(FeedService);
+
+  protected readonly firstName = computed(() =>
+    this.authService.currentUser()?.name?.split(' ')[0] ?? 'there',
+  );
+  protected readonly topWeakTopic = computed(() =>
+    this.learningService.confusionInsight()?.top_topic_name ?? null,
+  );
+
+  posts = signal<FeedPost[]>([]);
 
   activeSegment = signal<string>('school');
   expandedRankings = signal<Set<number>>(new Set<number>());
 
-  posts: Post[] = [
-    {
-      avatar: 'JL',
-      author: 'Jamie Liu',
-      reputation: 127,
-      school: 'MIT · CS225',
-      time: '2h ago',
-      topic: 'Physics · Mechanics',
-      title: 'When exactly do you use memoization vs tabulation for dynamic programming?',
-      body: 'I keep getting confused on this — my professor says they\'re equivalent in complexity but when do you actually prefer one? I find tabulation cleaner but memoization more intuitive. Is there a general heuristic?',
-      upvotes: 14,
-      upvoted: true,
-      comments: 3,
-      rankingReason: 'Matches your weak topic: Recursion and your recent confusion spike in DP optimization strategies.',
-      provenanceLink: 'Recursion Notes · Section 4',
-      avatarColor: 'var(--navy)',
-    },
-    {
-      avatar: 'MR',
-      author: 'Maya Roth',
-      reputation: 243,
-      school: 'MIT · CS225',
-      time: '5h ago',
-      topic: 'Mathematics · Induction',
-      title: 'Complete Guide: Strong vs Weak Induction — with worked examples',
-      body: 'Compiled 8 pages of notes covering when to use each, common pitfalls, and 6 worked exam-style problems. Includes a decision framework for picking the right approach on any problem.',
-      upvotes: 31,
-      upvoted: false,
-      comments: 7,
-      rankingReason: 'Trending in your cohort. 68% of CS225 students reviewed this material in the last 48 hours.',
-      provenanceLink: 'Induction Overview · Section 2',
-      avatarColor: 'var(--purple)',
-    },
-    {
-      avatar: 'SK',
-      author: 'Sam Kato',
-      reputation: 189,
-      school: 'MIT · CS225',
-      time: '8h ago',
-      topic: 'Computer Science · Algorithms',
-      title: 'School confusion alert: Recursion base cases',
-      body: 'Based on anonymized review data, most confusion is concentrated on off-by-one base cases and empty list recursion. Pset 3 Q4 specifically targets this. Recommend reviewing before Thursday.',
-      upvotes: 47,
-      upvoted: false,
-      comments: 12,
-      rankingReason: 'School-wide confusion spike detected. This aligns with your current study focus and upcoming deadline.',
-      provenanceLink: 'Recursion Notes · Section 1',
-      avatarColor: 'var(--emerald)',
-    },
-  ];
+  showPostForm = signal(false);
+  newPostTitle = signal('');
+  newPostBody = signal('');
 
-  constructor(router: Router) {
-    this.router = router;
+  ngOnInit(): void {
+    void this.feedService.loadPosts().then(() => {
+      this.posts.set([...this.feedService.posts()]);
+    });
+  }
+
+  onNewTitle(ev: Event): void {
+    this.newPostTitle.set((ev.target as HTMLInputElement).value);
+  }
+
+  onNewBody(ev: Event): void {
+    this.newPostBody.set((ev.target as HTMLTextAreaElement).value);
+  }
+
+  async onSubmitPost(): Promise<void> {
+    if (!this.newPostTitle().trim() || !this.newPostBody().trim()) {
+      return;
+    }
+    await this.feedService.createPost({
+      title: this.newPostTitle().trim(),
+      body: this.newPostBody().trim(),
+      post_type: 'question',
+    });
+    this.posts.set([...this.feedService.posts()]);
+    this.newPostTitle.set('');
+    this.newPostBody.set('');
+    this.showPostForm.set(false);
+  }
+
+  toggleUpvote(index: number): void {
+    this.posts.update((list) =>
+      list.map((p, i) => {
+        if (i !== index) {
+          return p;
+        }
+        return {
+          ...p,
+          upvoted: !p.upvoted,
+          upvotes: p.upvoted ? p.upvotes - 1 : p.upvotes + 1,
+        };
+      }),
+    );
+  }
+
+  authorInitials(name: string): string {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) {
+      return '?';
+    }
+    if (parts.length === 1) {
+      return parts[0].substring(0, 2).toUpperCase();
+    }
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+
+  avatarColorForName(name: string): string {
+    const colors = ['var(--navy)', 'var(--emerald)', 'var(--purple)', 'var(--amber)', 'var(--red)'];
+    let h = 0;
+    for (let i = 0; i < name.length; i++) {
+      h = (Math.imul(31, h) + name.charCodeAt(i)) | 0;
+    }
+    return colors[Math.abs(h) % colors.length];
+  }
+
+  formatPostType(t: string): string {
+    if (!t) {
+      return 'Post';
+    }
+    return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+  }
+
+  formatFeedTime(iso: string): string {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) {
+      return '';
+    }
+    const diffMs = Date.now() - d.getTime();
+    const sec = Math.floor(diffMs / 1000);
+    if (sec < 60) {
+      return 'just now';
+    }
+    const min = Math.floor(sec / 60);
+    if (min < 60) {
+      return `${min}m ago`;
+    }
+    const h = Math.floor(min / 60);
+    if (h < 24) {
+      return `${h}h ago`;
+    }
+    const days = Math.floor(h / 24);
+    if (days < 7) {
+      return `${days}d ago`;
+    }
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
 
   toggleRanking(index: number): void {
@@ -345,10 +445,5 @@ export default class FeedTabComponent {
 
   isRankingExpanded(index: number): boolean {
     return this.expandedRankings().has(index);
-  }
-
-  navigateToNotes(event: Event): void {
-    event.stopPropagation();
-    this.router.navigate(['/notes']);
   }
 }
