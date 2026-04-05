@@ -14,7 +14,7 @@ import (
 )
 
 // NewRouter wires the chi router with all middlewares and routes.
-func NewRouter(cfg *config.Config, db *pgxpool.Pool, logger *zap.Logger, authSvc service.AuthService, learning *handlers.LearningHandler, autopilot *handlers.AutopilotHandler, aiHandler *handlers.AIHandler, planner *handlers.PlannerHandler, tutoring *handlers.TutoringHandler, feed *handlers.FeedHandler) *chi.Mux {
+func NewRouter(cfg *config.Config, db *pgxpool.Pool, logger *zap.Logger, authSvc service.AuthService, learning *handlers.LearningHandler, autopilot *handlers.AutopilotHandler, aiHandler *handlers.AIHandler, planner *handlers.PlannerHandler, tutoring *handlers.TutoringHandler, feed *handlers.FeedHandler, profile *handlers.ProfileHandler) *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger(logger))
@@ -35,6 +35,7 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool, logger *zap.Logger, authSvc
 		v1.Group(func(protected chi.Router) {
 			protected.Use(middleware.RequireAuth(cfg.JWTSecret))
 			protected.Get("/me", auth.Me)
+			protected.Get("/profile/summary", profile.Summary)
 			protected.Get("/autopilot/today", autopilot.Today)
 
 			protected.Route("/courses", func(cr chi.Router) {

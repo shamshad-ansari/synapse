@@ -103,7 +103,11 @@ func main() {
 	feedSvc := service.NewFeedService(feedRepo)
 	feedH := &handlers.FeedHandler{Service: feedSvc}
 
-	r := router.NewRouter(&cfg, pool, logger, authSvc, learningH, autopilot, aiHandler, plannerH, tutoringH, feedH)
+	profileRepo := repository.NewPostgresProfileRepo(pool)
+	profileSvc := service.NewProfileService(profileRepo)
+	profileH := &handlers.ProfileHandler{Service: profileSvc}
+
+	r := router.NewRouter(&cfg, pool, logger, authSvc, learningH, autopilot, aiHandler, plannerH, tutoringH, feedH, profileH)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.HTTPPort,
