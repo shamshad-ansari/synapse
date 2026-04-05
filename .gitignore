@@ -29,6 +29,7 @@ tmp/
 scripts/
 
 .cursorrules
+AGENTS.md
 
 # Local scripts (not for repo)
 scripts/commit-progressive.sh

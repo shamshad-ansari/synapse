@@ -1,4 +1,4 @@
-.PHONY: help up down logs ps migrate-up migrate-down seed-alex-history fmt lint test check-db-url
+.PHONY: help up down logs ps migrate-up migrate-down rebuild fmt lint test check-db-url web seed
 
 .DEFAULT_GOAL := help
 
@@ -14,16 +14,20 @@ help:
 	@echo "Infra:"
 	@echo "  make up           - start local infra (docker compose)"
 	@echo "  make down         - stop local infra"
+	@echo "  make rebuild      - rebuild containers and restart (use after Go changes)"
 	@echo "  make logs         - tail docker logs"
 	@echo "  make ps           - show docker containers"
 	@echo ""
 	@echo "DB:"
 	@echo "  make migrate-up   - apply db migrations"
-	@echo "  make migrate-down - rollback db migrations"
-	@echo "  make seed-alex-history - backfill historical learning data for alex@mit.edu"
+	@echo "  make migrate-down - rollback the last db migration"
+	@echo "  make seed         - load local SQL (Alex + cohort feed/tutoring; needs postgres up)"
+	@echo ""
+	@echo "Frontend:"
+	@echo "  make web          - run the Angular dev server (localhost:4200)"
 	@echo ""
 	@echo "Quality:"
-	@echo "  make fmt          - format code (go fmt + frontend fmt)"
+	@echo "  make fmt          - format code"
 	@echo "  make lint         - lint code"
 	@echo "  make test         - run tests"
 
@@ -54,14 +58,25 @@ migrate-up: check-db-url
 migrate-down: check-db-url
 	docker compose run --rm migrate -path=/migrations -database "$(DB_URL)" down 1
 
-seed-alex-history:
-	./scripts/seed-alex-history.sh
+# Full local data: Alex prereqs, learning seed, cohort feed/tutoring, planner seed.
+# Requires: docker compose up -d postgres (and migrate-up). Uses psql inside the postgres container.
+seed:
+	@docker compose ps postgres --status running --quiet 2>/dev/null | grep -q . || (echo "ERROR: postgres not running. Run: make up"; exit 1)
+	cat infra/db/bootstrap_alex_prereqs.sql infra/db/populate_alex_data.sql infra/db/populate_alex_metrics.sql infra/db/demo_cohort_feed_tutoring.sql infra/seed/dev_seed.sql | docker compose exec -T postgres psql -U synapse -d synapse -v ON_ERROR_STOP=1
+
+web:
+	@echo "Starting Angular dev server..."
+	cd apps/web && npm install && npm start
 
 fmt:
-	@echo "TODO: add gofmt + frontend formatting in Phase 0 Step 3/4"
+	@echo "TODO: add gofmt + frontend formatting"
 
 lint:
-	@echo "TODO: add golangci-lint + frontend lint in Phase 0 Step 3/4"
+	@echo "TODO: add golangci-lint + frontend lint"
 
 test:
-	@echo "TODO: add go test + frontend tests in Phase 0 Step 3/4"
+	cd services/api-gateway && go test ./...
+
+# Requires running API + migrations; set TOKEN or LOGIN_EMAIL, LOGIN_PASSWORD, SCHOOL_DOMAIN
+test-feed-api:
+	cd services/api-gateway && ./scripts/test_feed_api.sh
