@@ -50,6 +50,8 @@ func main() {
 		api.Get("/courses/{courseID}/students/submissions", handlers.ListSubmissions)
 		api.Get("/courses/{courseID}/announcements", handlers.ListAnnouncements)
 		api.Get("/courses/{courseID}/discussion_topics", handlers.ListDiscussionTopics)
+		api.Get("/planner/items", handlers.ListPlannerItems)
+		api.Get("/calendar_events", handlers.ListCalendarEvents)
 	})
 
 	srv := &http.Server{

@@ -53,6 +53,26 @@ func (r *PostgresLearningRepo) CreateCourse(ctx context.Context, course *domain.
 	return &out, nil
 }
 
+// UpsertCourseFromLMS inserts a new course or updates an existing one matched by
+// (user_id, lms_course_id). This is idempotent — safe to call on every sync.
+func (r *PostgresLearningRepo) UpsertCourseFromLMS(ctx context.Context, course *domain.Course) (*domain.Course, error) {
+	var out domain.Course
+	err := r.pool.QueryRow(ctx,
+		`INSERT INTO courses (school_id, user_id, name, term, color, lms_course_id)
+		 VALUES ($1, $2, $3, $4, $5, $6)
+		 ON CONFLICT (user_id, lms_course_id) WHERE lms_course_id IS NOT NULL
+		 DO UPDATE SET name = EXCLUDED.name, term = EXCLUDED.term
+		 RETURNING id, school_id, user_id, name, term, color, lms_course_id, created_at`,
+		course.SchoolID, course.UserID, course.Name, course.Term, course.Color, course.LMSCourseID,
+	).Scan(
+		&out.ID, &out.SchoolID, &out.UserID, &out.Name, &out.Term, &out.Color, &out.LMSCourseID, &out.CreatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("UpsertCourseFromLMS: %w", err)
+	}
+	return &out, nil
+}
+
 func (r *PostgresLearningRepo) ListCourses(ctx context.Context, userID, schoolID uuid.UUID) ([]*domain.Course, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, school_id, user_id, name, term, color, lms_course_id, created_at

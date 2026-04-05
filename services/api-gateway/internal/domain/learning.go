@@ -126,6 +126,7 @@ type NoteMetric struct {
 // LearningRepository abstracts persistence for the learning core.
 type LearningRepository interface {
 	CreateCourse(ctx context.Context, course *Course) (*Course, error)
+	UpsertCourseFromLMS(ctx context.Context, course *Course) (*Course, error)
 	ListCourses(ctx context.Context, userID, schoolID uuid.UUID) ([]*Course, error)
 	GetCourse(ctx context.Context, courseID, userID, schoolID uuid.UUID) (*Course, error)
 	DeleteCourse(ctx context.Context, courseID, userID, schoolID uuid.UUID) error

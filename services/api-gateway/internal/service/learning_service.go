@@ -102,26 +102,9 @@ func (s *learningServiceImpl) DeleteCourse(ctx context.Context, courseID, userID
 }
 
 func (s *learningServiceImpl) ImportCoursesFromLMS(ctx context.Context, userID, schoolID uuid.UUID, lmsCourses []LMSCourseInput) ([]*domain.Course, error) {
-	existing, err := s.repo.ListCourses(ctx, userID, schoolID)
-	if err != nil {
-		return nil, fmt.Errorf("ImportCoursesFromLMS: %w", err)
-	}
-	seen := make(map[string]struct{})
-	for _, c := range existing {
-		if c.LMSCourseID != nil && *c.LMSCourseID != "" {
-			seen[*c.LMSCourseID] = struct{}{}
-		}
-	}
-
-	var created []*domain.Course
+	var upserted []*domain.Course
 	for _, in := range lmsCourses {
-		if in.LMSCourseID == "" {
-			continue
-		}
-		if _, dup := seen[in.LMSCourseID]; dup {
-			continue
-		}
-		if in.Name == "" {
+		if in.LMSCourseID == "" || in.Name == "" {
 			continue
 		}
 		lmsID := in.LMSCourseID
@@ -132,14 +115,13 @@ func (s *learningServiceImpl) ImportCoursesFromLMS(ctx context.Context, userID, 
 			Term:        in.Term,
 			LMSCourseID: &lmsID,
 		}
-		out, err := s.repo.CreateCourse(ctx, c)
+		out, err := s.repo.UpsertCourseFromLMS(ctx, c)
 		if err != nil {
 			return nil, fmt.Errorf("ImportCoursesFromLMS: %w", err)
 		}
-		seen[in.LMSCourseID] = struct{}{}
-		created = append(created, out)
+		upserted = append(upserted, out)
 	}
-	return created, nil
+	return upserted, nil
 }
 
 func (s *learningServiceImpl) CreateTopic(ctx context.Context, userID, schoolID, courseID uuid.UUID, name string, examWeight *float64) (*domain.Topic, error) {
