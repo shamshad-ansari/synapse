@@ -212,8 +212,7 @@ export class TutoringService {
         this.loadOutgoingRequests('all'),
       ]);
       const hint = (weakTopicHint ?? '').trim();
-      const topic = hint || 'Kingdom of Kush';
-      await this.loadTutorMatches(topic);
+      await this.loadTutorMatches(hint);
     } finally {
       this.listsLoading.set(false);
     }

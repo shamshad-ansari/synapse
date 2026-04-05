@@ -13,14 +13,7 @@ import { Router } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { AuthService } from '../core/auth/auth.service';
 import { TodayService, type Contract } from '../features/today/today.service';
-
-interface PeerInfo {
-  avatar: string;
-  name: string;
-  subject: string;
-  rating: string;
-  bgColor: string;
-}
+import { TutoringService } from '../features/tutoring/tutoring.service';
 
 
 @Component({
@@ -74,10 +67,6 @@ interface PeerInfo {
             style="width: 34px; height: 34px; background: transparent; border: 1px solid var(--divider); border-radius: var(--r-lg); color: var(--ink-muted)"
           >
             <lucide-icon name="bell" [size]="16" [strokeWidth]="2" />
-            <div
-              class="notification-dot"
-              style="position: absolute; top: 7px; right: 7px; width: 6px; height: 6px; background: var(--red); border-radius: 50%; border: 2px solid var(--bg)"
-            ></div>
           </div>
         </div>
       </div>
@@ -130,22 +119,37 @@ interface PeerInfo {
         <div class="relative" style="width: 76px; height: 76px; flex-shrink: 0">
           <svg viewBox="0 0 62 62" width="76" height="76" style="transform: rotate(-90deg)">
             <circle cx="31" cy="31" r="27" fill="none" stroke="var(--ink-ghost)" stroke-width="5" />
-            <circle #ring cx="31" cy="31" r="27" fill="none" stroke="url(#rg-flourish)" stroke-width="5" stroke-linecap="round" style="transition: stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1) 0.4s" />
+            <circle
+              #ring
+              cx="31"
+              cy="31"
+              r="27"
+              fill="none"
+              stroke="url(#rg-flourish)"
+              stroke-width="5"
+              stroke-linecap="round"
+              [attr.opacity]="c.readiness > 0 ? 1 : 0"
+              style="transition: stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1) 0.4s"
+            />
           </svg>
           <div
             class="absolute inset-0 flex items-center justify-center"
             style="font-size: 16px; font-weight: 800; font-family: var(--font-display); color: var(--ink)"
           >
-            {{ c.readiness }}%
+            @if (c.readiness > 0) {
+              {{ c.readiness }}%
+            } @else {
+              <span style="font-size: 13px; font-weight: 700; color: var(--ink-faint)">—</span>
+            }
           </div>
         </div>
         <div style="flex-shrink: 0">
           <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ink-faint); font-weight: 700; margin-bottom: 6px">
             Readiness
           </div>
-          <div style="font-size: 12.5px; color: var(--ink-muted); line-height: 1.7">
+            <div style="font-size: 12.5px; color: var(--ink-muted); line-height: 1.7">
             Focus area:<br />
-            <strong style="color: var(--ink); font-family: var(--font-display)">{{ topWeakTopic() }}</strong>
+            <strong style="color: var(--ink); font-family: var(--font-display)">{{ focusTopicLabel() }}</strong>
           </div>
         </div>
       </div>
@@ -288,27 +292,40 @@ interface PeerInfo {
             <div>
               <div class="flex items-baseline gap-2.5 mb-5">
                 <div style="font-size: 15px; font-weight: 700; font-family: var(--font-display); color: var(--ink)">Suggested Tutors</div>
-                <div style="font-size: 11.5px; color: var(--ink-faint); font-family: var(--mono)">for {{ topWeakTopic() }}</div>
+                @if (todayService.weakTopics().length > 0) {
+                  <div style="font-size: 11.5px; color: var(--ink-faint); font-family: var(--mono)">for {{ topWeakTopic() }}</div>
+                }
                 <div class="ml-auto cursor-pointer" style="font-size: 13px; color: var(--navy); font-weight: 600" (click)="navigateTo('/tutoring')">Browse →</div>
               </div>
-              @for (peer of peers; track peer.name) {
-                <div
-                  class="peer-item flex items-center gap-3 cursor-pointer"
-                  style="padding: 11px 14px; border-radius: var(--r-lg); background: transparent; transition: background var(--transition-base)"
-                >
-                  <div
-                    class="flex items-center justify-center"
-                    style="width: 32px; height: 32px; border-radius: 50%; font-size: 11.5px; font-weight: 700; flex-shrink: 0; color: #fff"
-                    [style.background]="peer.bgColor"
-                  >
-                    {{ peer.avatar }}
-                  </div>
-                  <div class="flex-1">
-                    <div style="font-size: 13px; font-weight: 600; color: var(--ink)">{{ peer.name }}</div>
-                    <div style="font-size: 11.5px; color: var(--ink-muted)">{{ peer.subject }}</div>
-                  </div>
-                  <div style="font-size: 11.5px; font-weight: 700; font-family: var(--mono); color: #F59E0B">★ {{ peer.rating }}</div>
+              @if (tutoringService.matchesLoading()) {
+                <div style="padding: 14px; border-radius: var(--r-lg); border: 1px dashed var(--divider); background: var(--surface-sub); color: var(--ink-muted); font-size: 12.5px">
+                  Loading matches…
                 </div>
+              } @else if (tutoringService.tutorMatches().length === 0) {
+                <div style="padding: 14px; border-radius: var(--r-lg); border: 1px dashed var(--divider); background: var(--surface-sub); color: var(--ink-muted); font-size: 12.5px; line-height: 1.6">
+                  No tutor suggestions yet. Complete a review with confusion signals on a topic, or open Tutoring to search by topic.
+                </div>
+              } @else {
+                @for (t of tutoringService.tutorMatches().slice(0, 3); track t.user_id; let idx = $index) {
+                  <div
+                    class="peer-item flex items-center gap-3 cursor-pointer"
+                    style="padding: 11px 14px; border-radius: var(--r-lg); background: transparent; transition: background var(--transition-base)"
+                    (click)="navigateTo('/tutoring')"
+                  >
+                    <div
+                      class="flex items-center justify-center"
+                      style="width: 32px; height: 32px; border-radius: 50%; font-size: 11.5px; font-weight: 700; flex-shrink: 0; color: #fff"
+                      [style.background]="tutorAvatarColor(idx)"
+                    >
+                      {{ tutorInitials(t.name) }}
+                    </div>
+                    <div class="flex-1">
+                      <div style="font-size: 13px; font-weight: 600; color: var(--ink)">{{ t.name }}</div>
+                      <div style="font-size: 11.5px; color: var(--ink-muted)">{{ t.topic_name }} · {{ masteryPct(t) }}% mastery</div>
+                    </div>
+                    <div style="font-size: 11.5px; font-weight: 700; font-family: var(--mono); color: #F59E0B">★ {{ tutorRatingStars(t.reputation) }}</div>
+                  </div>
+                }
               }
             </div>
 
@@ -317,22 +334,21 @@ interface PeerInfo {
               <div class="flex items-baseline gap-2.5 mb-5">
                 <div style="font-size: 15px; font-weight: 700; font-family: var(--font-display); color: var(--ink)">Interventions</div>
               </div>
-              <div style="padding: 16px 18px; border-radius: var(--r-lg); background: var(--navy-light); border: 1px solid var(--navy-border); margin-bottom: 12px">
-                <div class="flex items-center gap-1.5" style="font-size: 13.5px; font-weight: 600; color: var(--ink); margin-bottom: 4px">
-                  <lucide-icon name="book-open" [size]="15" [strokeWidth]="2" style="color: var(--navy)" /> Illusion of competence
+              @if (todayService.streak() >= 3) {
+                <div style="padding: 16px 18px; border-radius: var(--r-lg); background: var(--emerald-light); border: 1px solid var(--emerald-border)">
+                  <div class="flex items-center gap-1.5" style="font-size: 13.5px; font-weight: 600; color: var(--ink); margin-bottom: 4px">
+                    <lucide-icon name="target" [size]="15" [strokeWidth]="2" style="color: var(--emerald)" /> {{ todayService.streak() }}-day streak
+                  </div>
+                  <div style="font-size: 12.5px; color: var(--ink-muted); line-height: 1.6">
+                    Keep reviewing to extend your streak.
+                  </div>
                 </div>
-                <div style="font-size: 12.5px; color: var(--ink-muted); line-height: 1.6">
-                  High accuracy on Induction but slow response — harder practice cards recommended to confirm real mastery.
+              }
+              @if (todayService.streak() < 3) {
+                <div style="padding: 16px; border-radius: var(--r-lg); border: 1px dashed var(--divider); background: var(--surface-sub); color: var(--ink-muted); font-size: 12.5px; line-height: 1.6">
+                  Personalized nudges appear after more review activity (e.g. confusion patterns, pacing).
                 </div>
-              </div>
-              <div style="padding: 16px 18px; border-radius: var(--r-lg); background: var(--emerald-light); border: 1px solid var(--emerald-border)">
-                <div class="flex items-center gap-1.5" style="font-size: 13.5px; font-weight: 600; color: var(--ink); margin-bottom: 4px">
-                  <lucide-icon name="target" [size]="15" [strokeWidth]="2" style="color: var(--emerald)" /> 3-day streak!
-                </div>
-                <div style="font-size: 12.5px; color: var(--ink-muted); line-height: 1.6">
-                  Ahead of 72% of your school cohort. Keep today's session alive.
-                </div>
-              </div>
+              }
             </div>
           </div>
         </div>
@@ -561,6 +577,7 @@ export default class TodayTabComponent implements OnInit {
   private readonly router = inject(Router);
   protected readonly todayService = inject(TodayService);
   protected readonly authService = inject(AuthService);
+  protected readonly tutoringService = inject(TutoringService);
   readonly ringRef = viewChild<ElementRef<SVGCircleElement>>('ring');
 
   protected readonly todayDateStr = new Date().toLocaleDateString('en-US', {
@@ -577,12 +594,6 @@ export default class TodayTabComponent implements OnInit {
 
   readonly statsRow1 = computed(() => this.statsWithDue().slice(0, 2));
   readonly statsRow2 = computed(() => this.statsWithDue().slice(2, 4));
-
-  readonly peers: PeerInfo[] = [
-    { avatar: 'JL', name: 'Jamie Liu', subject: 'Recursion · 94% mastery', rating: '4.9', bgColor: 'var(--navy)' },
-    { avatar: 'SK', name: 'Sam Kato', subject: 'Algorithms · 88% mastery', rating: '4.7', bgColor: 'var(--emerald)' },
-    { avatar: 'MR', name: 'Maya Roth', subject: 'Logic · 91% mastery', rating: '4.8', bgColor: 'var(--purple)' },
-  ];
 
   readonly streakDays = computed<(boolean | string)[]>(() => {
     const count = Math.max(0, Math.min(14, this.todayService.streak()));
@@ -603,7 +614,30 @@ export default class TodayTabComponent implements OnInit {
     return this.todayService.weakTopics().map((t) => t.name).slice(0, 7);
   });
 
-  readonly topWeakTopic = computed(() => this.todayService.weakTopics()[0]?.name ?? 'No weak topics yet');
+  readonly topWeakTopic = computed(() => this.todayService.weakTopics()[0]?.name ?? '');
+
+  readonly focusTopicLabel = computed(() => this.topWeakTopic() || 'Not enough data yet');
+
+  protected tutorInitials(name: string): string {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '?';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+
+  protected tutorAvatarColor(index: number): string {
+    const colors = ['var(--navy)', 'var(--emerald)', 'var(--purple)'];
+    return colors[index % colors.length];
+  }
+
+  protected masteryPct(t: { mastery: number }): number {
+    const m = t.mastery;
+    return m <= 1 ? Math.round(m * 100) : Math.min(100, Math.round(m));
+  }
+
+  protected tutorRatingStars(reputation: number): string {
+    return Math.min(5, Math.max(0, reputation) / 20).toFixed(1);
+  }
 
   constructor() {
     afterNextRender(() => {
@@ -653,6 +687,8 @@ export default class TodayTabComponent implements OnInit {
         return 'At Risk';
       case 'off_track':
         return 'Off Track';
+      case 'no_data':
+        return 'Not started';
       default:
         return 'On Track';
     }
@@ -666,6 +702,8 @@ export default class TodayTabComponent implements OnInit {
         return 'rgba(245, 158, 11, 0.15)';
       case 'off_track':
         return 'var(--red-light)';
+      case 'no_data':
+        return 'var(--surface-sub)';
       default:
         return 'var(--emerald-light)';
     }
@@ -679,6 +717,8 @@ export default class TodayTabComponent implements OnInit {
         return '#F59E0B';
       case 'off_track':
         return 'var(--red)';
+      case 'no_data':
+        return 'var(--ink-muted)';
       default:
         return 'var(--emerald)';
     }
@@ -692,6 +732,8 @@ export default class TodayTabComponent implements OnInit {
         return 'rgba(245, 158, 11, 0.35)';
       case 'off_track':
         return 'var(--red-border)';
+      case 'no_data':
+        return 'var(--divider)';
       default:
         return 'var(--emerald-border)';
     }

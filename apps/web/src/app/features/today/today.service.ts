@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { LearningService } from '../learning/learning.service';
+import { TutoringService } from '../tutoring/tutoring.service';
 
 /** API row shape (snake_case from JSON). */
 interface NbaActionRow {
@@ -27,7 +28,7 @@ export interface Contract {
   course_name: string;
   exam_date: string;
   days_until: number;
-  status: 'on_track' | 'at_risk' | 'off_track';
+  status: 'on_track' | 'at_risk' | 'off_track' | 'no_data';
   weekly_hours_budget: number;
   hours_done: number;
   readiness: number;
@@ -66,6 +67,7 @@ export interface TodayData {
 export class TodayService {
   private readonly http = inject(HttpClient);
   private readonly learningService = inject(LearningService);
+  private readonly tutoringService = inject(TutoringService);
   private readonly apiUrl = environment.apiUrl;
 
   readonly actions = signal<NbaAction[]>([]);
@@ -103,7 +105,10 @@ export class TodayService {
       this.weakTopics.set(d.weak_topics);
       this.stats.set(d.stats);
       this.streak.set(d.streak);
-      this.deadlineAlert.set(d.deadline_alert);
+      const alert = d.deadline_alert;
+      this.deadlineAlert.set(alert?.title?.trim() ? alert : null);
+      const weakName = d.weak_topics?.[0]?.name?.trim() ?? '';
+      await this.tutoringService.loadTutorMatches(weakName);
       try {
         await this.learningService.loadDueCards(undefined, 20);
       } catch {
