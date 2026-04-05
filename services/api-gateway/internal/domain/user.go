@@ -16,9 +16,11 @@ type School struct {
 }
 
 // User mirrors the users table from migration 000001.
+// SchoolName is filled when loaded with a join to schools (login, /me).
 type User struct {
 	ID           uuid.UUID
 	SchoolID     uuid.UUID
+	SchoolName   string
 	Name         string
 	Email        string
 	PasswordHash string
@@ -27,21 +29,23 @@ type User struct {
 
 // UserResponse is the public-facing DTO that never exposes password_hash.
 type UserResponse struct {
-	ID        uuid.UUID `json:"id"`
-	SchoolID  uuid.UUID `json:"school_id"`
-	Name      string    `json:"name"`
-	Email     string    `json:"email"`
-	CreatedAt time.Time `json:"created_at"`
+	ID         uuid.UUID `json:"id"`
+	SchoolID   uuid.UUID `json:"school_id"`
+	SchoolName string    `json:"school_name"`
+	Name       string    `json:"name"`
+	Email      string    `json:"email"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // ToResponse strips sensitive fields from User.
 func (u *User) ToResponse() *UserResponse {
 	return &UserResponse{
-		ID:        u.ID,
-		SchoolID:  u.SchoolID,
-		Name:      u.Name,
-		Email:     u.Email,
-		CreatedAt: u.CreatedAt,
+		ID:         u.ID,
+		SchoolID:   u.SchoolID,
+		SchoolName: u.SchoolName,
+		Name:       u.Name,
+		Email:      u.Email,
+		CreatedAt:  u.CreatedAt,
 	}
 }
 

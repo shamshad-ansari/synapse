@@ -79,6 +79,7 @@ func (s *authServiceImpl) Register(ctx context.Context, in RegisterInput) (*Auth
 		}
 		return nil, fmt.Errorf("Register: %w", err)
 	}
+	user.SchoolName = school.Name
 
 	return s.generateTokens(user)
 }

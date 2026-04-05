@@ -72,11 +72,12 @@ func (r *PostgresUserRepo) CreateUser(ctx context.Context, schoolID uuid.UUID, n
 func (r *PostgresUserRepo) FindUserByEmail(ctx context.Context, email string, schoolID uuid.UUID) (*domain.User, error) {
 	var u domain.User
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, school_id, name, email, password_hash, created_at
-		 FROM users
-		 WHERE lower(email) = lower($1) AND school_id = $2`,
+		`SELECT u.id, u.school_id, s.name, u.name, u.email, u.password_hash, u.created_at
+		 FROM users u
+		 INNER JOIN schools s ON s.id = u.school_id
+		 WHERE lower(u.email) = lower($1) AND u.school_id = $2`,
 		email, schoolID,
-	).Scan(&u.ID, &u.SchoolID, &u.Name, &u.Email, &u.PasswordHash, &u.CreatedAt)
+	).Scan(&u.ID, &u.SchoolID, &u.SchoolName, &u.Name, &u.Email, &u.PasswordHash, &u.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("FindUserByEmail: %w", domain.ErrNotFound)
@@ -89,11 +90,12 @@ func (r *PostgresUserRepo) FindUserByEmail(ctx context.Context, email string, sc
 func (r *PostgresUserRepo) FindUserByID(ctx context.Context, userID uuid.UUID, schoolID uuid.UUID) (*domain.User, error) {
 	var u domain.User
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, school_id, name, email, password_hash, created_at
-		 FROM users
-		 WHERE id = $1 AND school_id = $2`,
+		`SELECT u.id, u.school_id, s.name, u.name, u.email, u.password_hash, u.created_at
+		 FROM users u
+		 INNER JOIN schools s ON s.id = u.school_id
+		 WHERE u.id = $1 AND u.school_id = $2`,
 		userID, schoolID,
-	).Scan(&u.ID, &u.SchoolID, &u.Name, &u.Email, &u.PasswordHash, &u.CreatedAt)
+	).Scan(&u.ID, &u.SchoolID, &u.SchoolName, &u.Name, &u.Email, &u.PasswordHash, &u.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("FindUserByID: %w", domain.ErrNotFound)
