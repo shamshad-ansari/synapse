@@ -7,6 +7,7 @@ import { environment } from '../../../environments/environment';
 export interface User {
   id: string;
   school_id: string;
+  school_name?: string;
   name: string;
   email: string;
   created_at: string;
