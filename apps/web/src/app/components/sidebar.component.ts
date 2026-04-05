@@ -81,7 +81,7 @@ interface NavSection {
           style="width: 28px; height: 28px; border-radius: 8px; background: #eef4e8; border: 1px solid #d8e6cc; flex-shrink: 0; cursor: pointer; overflow: hidden"
         >
           <img
-            src="assets/synapse-logo.png"
+            src="/assets/synapse-logo.png"
             alt="Synapse logo"
             style="width: 100%; height: 100%; object-fit: cover; object-position: center; transform: scale(1.32)"
           />
@@ -152,7 +152,6 @@ interface NavSection {
       <!-- User Info -->
       <div
         class="user-section flex items-center gap-2 cursor-pointer relative"
-        [class.profile-active]="isActive('/profile')"
         style="margin-top: auto; padding: 16px 10px 0; border-top: 1px solid var(--divider)"
         [style.justify-content]="isOpen() ? 'flex-start' : 'center'"
         (click)="goToProfile()"
@@ -264,15 +263,6 @@ interface NavSection {
       border: 1.5px solid var(--sidebar-bg);
     }
 
-    .user-section { transition: transform var(--transition-fast); }
-    .user-section:hover { transform: scale(1.02); }
-    .user-section:active { transform: scale(0.98); }
-    .user-section.profile-active {
-      background: var(--active-bg);
-      border-radius: var(--r-lg);
-      border-top-color: transparent !important;
-    }
-
     .user-menu {
       position: absolute;
       bottom: 100%;
@@ -316,6 +306,9 @@ export class SidebarComponent implements OnInit {
 
   protected readonly dueCount = computed(() => this.learningService.dueCards().length);
 
+  /** Unread feed / school messages — wire to API when unread tracking exists; no placeholder badge. */
+  protected readonly feedUnreadCount = signal(0);
+
   ngOnInit() {
     this.learningService.loadDueCards();
   }
@@ -326,7 +319,8 @@ export class SidebarComponent implements OnInit {
 
   protected readonly userSchool = computed(() => {
     const user = this.authService.currentUser();
-    return user ? 'University' : '';
+    if (!user) return '';
+    return user.school_name?.trim() || 'School';
   });
 
   protected readonly userInitials = computed(() => {
@@ -366,7 +360,12 @@ export class SidebarComponent implements OnInit {
       header: 'Community',
       pushDown: false,
       items: [
-        { icon: 'message-square', label: 'Feed', route: '/feed', badge: '3' },
+        {
+          icon: 'message-square',
+          label: 'Feed',
+          route: '/feed',
+          badge: this.feedUnreadCount() > 0 ? String(this.feedUnreadCount()) : undefined,
+        },
         { icon: 'users', label: 'Tutoring', route: '/tutoring' },
       ],
     },

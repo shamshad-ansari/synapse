@@ -5,6 +5,7 @@ import { Router, ActivatedRoute } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { CanvasService } from './canvas.service';
 import { environment } from '../../../environments/environment';
+import { ElegantShapeComponent } from '../../landing/components/elegant-shape.component';
 
 /** http(s) URL with a host; includes localhost (no period in hostname). */
 function isValidCanvasInstitutionUrl(raw: string): boolean {
@@ -31,14 +32,26 @@ function isValidCanvasInstitutionUrl(raw: string): boolean {
   selector: 'app-canvas-connect-page',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [LucideAngularModule],
+  imports: [LucideAngularModule, ElegantShapeComponent],
   template: `
     <div class="page">
+      <div class="floating-shapes" aria-hidden="true">
+        <app-elegant-shape [delay]="0.3" [width]="400" [height]="300" [rotate]="12" colorClass="bg-[#00A344]/15"
+          className="left-[-10%] md:left-[-5%] top-[15%] md:top-[20%]"></app-elegant-shape>
+        <app-elegant-shape [delay]="0.5" [width]="350" [height]="250" [rotate]="-15" colorClass="bg-[#00A344]/15"
+          className="right-[-5%] md:right-[0%] top-[70%] md:top-[75%]"></app-elegant-shape>
+        <app-elegant-shape [delay]="0.4" [width]="200" [height]="200" [rotate]="-8" colorClass="bg-[#00A344]/15"
+          className="left-[5%] md:left-[10%] bottom-[5%] md:bottom-[10%]"></app-elegant-shape>
+        <app-elegant-shape [delay]="0.6" [width]="150" [height]="150" [rotate]="20" colorClass="bg-[#00A344]/15"
+          className="right-[15%] md:right-[20%] top-[10%] md:top-[15%]"></app-elegant-shape>
+        <app-elegant-shape [delay]="0.7" [width]="250" [height]="180" [rotate]="-25" colorClass="bg-[#00A344]/15"
+          className="left-[20%] md:left-[25%] top-[5%] md:top-[10%]"></app-elegant-shape>
+      </div>
       <div class="page-inner">
         <!-- Brand header: Step 1 only -->
         @if (currentStep() === 1) {
           <div class="brand">
-            <img src="assets/synapse-logo.png" width="32" height="32" alt="Synapse" />
+            <img src="/assets/synapse-logo.png" width="32" height="32" alt="Synapse" />
             <span class="brand-name">Synapse</span>
           </div>
         }
@@ -147,6 +160,8 @@ function isValidCanvasInstitutionUrl(raw: string): boolean {
   `,
   styles: [`
     .page {
+      position: relative;
+      overflow: hidden;
       min-height: 100vh;
       background: var(--bg);
       display: flex;
@@ -154,7 +169,16 @@ function isValidCanvasInstitutionUrl(raw: string): boolean {
       justify-content: center;
       padding: 24px;
     }
+    .floating-shapes {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 0;
+    }
     .page-inner {
+      position: relative;
+      z-index: 10;
       display: flex;
       flex-direction: column;
       align-items: center;

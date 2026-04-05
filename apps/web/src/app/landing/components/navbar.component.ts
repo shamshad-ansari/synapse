@@ -21,7 +21,7 @@ import { AuthService } from '../../core/auth/auth.service';
 export class NavbarComponent {
   private readonly authService = inject(AuthService);
 
-  readonly logoImage = 'assets/synapse-logo.png';
+  readonly logoImage = '/assets/synapse-logo.png';
   readonly isAuthenticated = computed(() => this.authService.isAuthenticated());
   readonly isScrolled = signal(false);
 

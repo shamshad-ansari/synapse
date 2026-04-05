@@ -12,6 +12,6 @@ export class FooterComponent {
   readonly Twitter = Twitter;
   readonly Linkedin = Linkedin;
   readonly Github = Github;
-  readonly logoImage = 'assets/synapse-logo.png';
+  readonly logoImage = '/assets/synapse-logo.png';
   readonly currentYear = new Date().getFullYear();
 }

@@ -11,7 +11,7 @@ import { ElegantShapeComponent } from './elegant-shape.component';
 })
 export class HeroComponent {
   readonly ArrowRight = ArrowRight;
-  readonly logoImage = 'assets/synapse-logo.png';
+  readonly logoImage = '/assets/synapse-logo.png';
 
   readonly masteryFontStyle: Record<string, string> = {
     'font-family': 'Georgia, serif',
