@@ -16,7 +16,7 @@ import {
   ArrowUp, CheckCircle, X, HelpCircle,
   MessageCircle, Bookmark, ChevronDown, Info,
   Shield, Edit2, ShieldCheck, Eye, EyeOff,
-  XCircle, Key, Save, Sparkles, Trash2,
+  XCircle, Key, Save, Sparkles, Trash2, CornerDownRight,
 } from 'lucide-angular';
 import { routes } from './app.routes';
 
@@ -45,7 +45,7 @@ export const appConfig: ApplicationConfig = {
         ArrowUp, CheckCircle, X, HelpCircle,
         MessageCircle, Bookmark, ChevronDown, Info,
         Shield, Edit2, ShieldCheck, Eye, EyeOff,
-        XCircle, Key, Save, Sparkles, Trash2,
+        XCircle, Key, Save, Sparkles, Trash2, CornerDownRight,
       }),
     },
   ],
