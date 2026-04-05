@@ -139,7 +139,7 @@ import { LearningService } from '../features/learning/learning.service';
             <div
               class="review-card flip-card-front"
               [class.review-card--unrevealed]="!revealed()"
-              (click)="handleReveal()"
+              (click)="toggleReveal()"
               (mouseenter)="isCardHovered.set(true)"
               (mouseleave)="isCardHovered.set(false)"
             >
@@ -153,12 +153,15 @@ import { LearningService } from '../features/learning/learning.service';
                 {{ currentCard().q }}
               </div>
               <div style="font-size: 13px; color: var(--ink-faint); margin-top: 40px; font-weight: 500">
-                Click or press Space to reveal
+                Click or press Space to flip
               </div>
             </div>
 
             <!-- Back Face -->
-            <div class="review-card flip-card-back">
+            <div
+              class="review-card flip-card-back review-card--answer"
+              (click)="toggleReveal()"
+            >
               <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--ink-faint); font-family: var(--mono); font-weight: 700">
                 Answer
               </div>
@@ -170,10 +173,13 @@ import { LearningService } from '../features/learning/learning.service';
               >
                 {{ currentCard().a }}
               </div>
+              <div style="font-size: 13px; color: var(--ink-faint); margin-top: 28px; font-weight: 500">
+                Click or press Space to flip back
+              </div>
               <a
                 class="review-source-link flex items-center gap-1.5 cursor-pointer transition-all"
-                style="margin-top: 40px"
-                (click)="$event.stopPropagation(); navigateToNotes()"
+                style="margin-top: 16px"
+                (click)="$event.stopPropagation(); $event.preventDefault(); navigateToNotes()"
               >
                 <lucide-icon name="file-text" [size]="14" [strokeWidth]="2" /> Source: {{ currentCard().src }}
               </a>
@@ -188,7 +194,7 @@ import { LearningService } from '../features/learning/learning.service';
           <div class="flex justify-center w-full">
             <button
               class="review-reveal-btn"
-              (click)="handleReveal()"
+              (click)="toggleReveal()"
             >
               Reveal Answer
             </button>
@@ -338,6 +344,13 @@ import { LearningService } from '../features/learning/learning.service';
     }
     .review-card--unrevealed:hover {
       transform: translateY(-4px);
+    }
+
+    .flip-card-back.review-card--answer {
+      cursor: pointer;
+    }
+    .flip-card-back.review-card--answer:hover {
+      transform: rotateY(180deg) translateY(-2px);
     }
 
     .review-source-link {
@@ -510,8 +523,8 @@ export default class ReviewTabComponent implements OnInit {
     void this.learningService.loadDueCards(undefined, 20);
   }
 
-  handleReveal(): void {
-    this.revealed.set(true);
+  toggleReveal(): void {
+    this.revealed.update((v) => !v);
   }
 
   async handleRating(confidence: number): Promise<void> {
@@ -576,10 +589,16 @@ export default class ReviewTabComponent implements OnInit {
 
   @HostListener('window:keydown', ['$event'])
   handleKeyboard(event: KeyboardEvent) {
-    if (event.code === 'Space' && !this.revealed()) {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('input, textarea, [contenteditable="true"]')) {
+      return;
+    }
+    if (event.code === 'Space') {
       event.preventDefault();
-      this.handleReveal();
-    } else if (this.revealed()) {
+      this.toggleReveal();
+      return;
+    }
+    if (this.revealed()) {
       if (event.key === '1') this.handleRating(1);
       if (event.key === '2') this.handleRating(2);
       if (event.key === '3') this.handleRating(3);
