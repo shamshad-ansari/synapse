@@ -1,15 +1,21 @@
 <section class="relative min-h-screen flex flex-col items-center justify-center overflow-hidden bg-white">
-  <!-- Dotted Background Pattern -->
-  <div
-    class="absolute inset-0 z-0 pointer-events-none"
-    [ngStyle]="dottedBgStyle"
-  ></div>
+  <!-- Animated Green Shapes -->
+  <div class="absolute inset-0 overflow-hidden pointer-events-none z-[1]">
+    <app-elegant-shape [delay]="0.3" [width]="400" [height]="300" [rotate]="12" colorClass="bg-[#00A344]/15"
+      className="left-[-10%] md:left-[-5%] top-[15%] md:top-[20%]"></app-elegant-shape>
 
-  <!-- Glowing Background SVG on top of dots -->
-  <div
-    class="absolute inset-0 z-[1] pointer-events-none opacity-90 mix-blend-multiply"
-    [ngStyle]="glowBgStyle"
-  ></div>
+    <app-elegant-shape [delay]="0.5" [width]="350" [height]="250" [rotate]="-15" colorClass="bg-[#00A344]/15"
+      className="right-[-5%] md:right-[0%] top-[70%] md:top-[75%]"></app-elegant-shape>
+
+    <app-elegant-shape [delay]="0.4" [width]="200" [height]="200" [rotate]="-8" colorClass="bg-[#00A344]/15"
+      className="left-[5%] md:left-[10%] bottom-[5%] md:bottom-[10%]"></app-elegant-shape>
+
+    <app-elegant-shape [delay]="0.6" [width]="150" [height]="150" [rotate]="20" colorClass="bg-[#00A344]/15"
+      className="right-[15%] md:right-[20%] top-[10%] md:top-[15%]"></app-elegant-shape>
+
+    <app-elegant-shape [delay]="0.7" [width]="250" [height]="180" [rotate]="-25" colorClass="bg-[#00A344]/15"
+      className="left-[20%] md:left-[25%] top-[5%] md:top-[10%]"></app-elegant-shape>
+  </div>
 
   <div class="container relative z-10 px-6 mx-auto max-w-7xl flex flex-col items-center text-center -mt-16">
 
@@ -19,36 +25,31 @@
     </div>
 
     <!-- Headline -->
-    <h1 class="max-w-4xl mb-6 text-6xl md:text-[5.5rem] font-bold tracking-tight text-slate-900 font-['Bricolage_Grotesque'] leading-[1.05]">
+    <h1
+      class="max-w-4xl mb-6 text-6xl md:text-[5.5rem] font-bold tracking-tight text-slate-900 font-['Bricolage_Grotesque'] leading-[1.05]">
       Network-Aware <br />
       <span class="inline-block mt-2">Intelligence</span>
     </h1>
 
     <!-- Stylized accent word -->
-    <div
-      class="mb-10 text-[5.5rem] md:text-[7rem] font-medium leading-[0.8] text-[#ebd45b] -mt-4 transform -rotate-2"
-      [ngStyle]="masteryFontStyle"
-    >
+    <div class="mb-10 text-[5.5rem] md:text-[7rem] font-medium leading-[0.8] text-[#ebd45b] -mt-4 transform -rotate-2"
+      [ngStyle]="masteryFontStyle">
       Mastery
     </div>
 
     <!-- Subheadline -->
     <p class="max-w-xl mb-12 text-lg md:text-[1.1rem] text-slate-500 font-['Inter'] font-normal leading-relaxed">
-      Model individual mastery and collective confusion. <br class="hidden md:block" /> AI-powered learning optimization made simple.
+      Model individual mastery and collective confusion. <br class="hidden md:block" /> AI-powered learning optimization
+      made simple.
     </p>
 
     <!-- CTA -->
-    <button class="group inline-flex items-center justify-center gap-3 px-8 py-3.5 bg-slate-900 text-white rounded-full font-['Inter'] font-semibold text-[15px] transition-all hover:bg-slate-800 shadow-[0_4px_20px_-2px_rgba(0,0,0,0.05)] hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 active:translate-y-0">
+    <button
+      class="group inline-flex items-center justify-center gap-3 px-8 py-3.5 bg-slate-900 text-white rounded-full font-['Inter'] font-semibold text-[15px] transition-all hover:bg-slate-800 shadow-[0_4px_20px_-2px_rgba(0,0,0,0.05)] hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 active:translate-y-0">
       <span class="text-lg tracking-tight">Get Started</span>
       <lucide-icon [img]="ArrowRight" [size]="16" [strokeWidth]="1.5"></lucide-icon>
     </button>
 
-    <!-- Secondary CTA -->
-    <a href="#how-it-works"
-       class="mt-5 inline-block"
-       style="font-size: 13.5px; color: var(--ink-muted); text-decoration: none; cursor: pointer">
-      See how it works &darr;
-    </a>
 
   </div>
 </section>
