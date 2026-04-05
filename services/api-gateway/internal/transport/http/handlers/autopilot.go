@@ -156,23 +156,37 @@ func (h *AutopilotHandler) Today(w http.ResponseWriter, r *http.Request) {
 			var name string
 			var mastery int
 			if rows.Scan(&name, &mastery) == nil {
+				rawBars := []int{mastery + 16, mastery + 7, mastery, mastery - 5, mastery - 9}
+				bars := make([]int, len(rawBars))
+				for i, v := range rawBars {
+					if v < 0 {
+						v = 0
+					}
+					if v > 100 {
+						v = 100
+					}
+					bars[i] = v
+				}
 				weakTopics = append(weakTopics, weakTopicPayload{
 					Name:    name,
 					Mastery: mastery,
-					Bars:    []int{mastery + 16, mastery + 7, mastery, mastery - 5, mastery - 9},
+					Bars:    bars,
 				})
 			}
 		}
 	}
-	if len(weakTopics) == 0 {
-		weakTopics = append(weakTopics, weakTopicPayload{Name: "Foundations", Mastery: 72, Bars: []int{82, 78, 72, 70, 68}})
+	topWeakTopic := ""
+	if len(weakTopics) > 0 {
+		topWeakTopic = weakTopics[0].Name
 	}
 
-	topWeakTopic := weakTopics[0].Name
-	hotspots := len(weakTopics)
-	readiness := 85 - hotspots*7
-	if readiness < 40 {
-		readiness = 40
+	readiness := 0
+	if len(weakTopics) > 0 {
+		hotspots := len(weakTopics)
+		readiness = 85 - hotspots*7
+		if readiness < 40 {
+			readiness = 40
+		}
 	}
 
 	streak := h.computeStreak(r.Context(), userID, schoolID)
@@ -212,31 +226,54 @@ func (h *AutopilotHandler) Today(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	actions := []nbaAction{
-		{
+	var actions []nbaAction
+	if dueCount > 0 {
+		actions = append(actions, nbaAction{
 			Icon:       "clock",
 			Title:      "Review due cards",
 			Reason:     "Keep your recall fresh with today's due queue",
 			Duration:   "~12 min",
 			ButtonText: "Start Review",
 			Route:      "/review",
-		},
-		{
-			Icon:       "book-open",
-			Title:      `Revisit weak topic`,
-			Reason:     "Recent confusion concentrated in " + topWeakTopic,
-			Duration:   "~10 min",
-			ButtonText: "Open Notes",
-			Route:      "/notes",
-		},
-		{
-			Icon:       "users",
-			Title:      "Ask for tutor help",
-			Reason:     "Use peer support before your next deadline",
-			Duration:   "~15 min",
-			ButtonText: "Find Tutors",
-			Route:      "/tutoring",
-		},
+		})
+	} else {
+		actions = append(actions, nbaAction{
+			Icon:       "zap",
+			Title:      "Start your review habit",
+			Reason:     "Add flashcards or connect Canvas so Synapse can queue spaced repetition for you.",
+			Duration:   "—",
+			ButtonText: "Open Review",
+			Route:      "/review",
+		})
+	}
+	if len(weakTopics) > 0 && topWeakTopic != "" {
+		actions = append(actions,
+			nbaAction{
+				Icon:       "book-open",
+				Title:      "Revisit weak topic",
+				Reason:     "Recent confusion concentrated in " + topWeakTopic,
+				Duration:   "~10 min",
+				ButtonText: "Open Notes",
+				Route:      "/notes",
+			},
+			nbaAction{
+				Icon:       "users",
+				Title:      "Ask for tutor help",
+				Reason:     "Peers who list " + topWeakTopic + " can help—match on mastery in Tutoring.",
+				Duration:   "~15 min",
+				ButtonText: "Find Tutors",
+				Route:      "/tutoring",
+			},
+		)
+	}
+
+	weeklyBudget := 8.0
+	contractStatus := "on_track"
+	if courseName == "No active course" || courseName == "" {
+		weeklyBudget = 0
+	}
+	if weeklyBudget == 0 && readiness == 0 {
+		contractStatus = "no_data"
 	}
 
 	data := todayPayload{
@@ -246,8 +283,8 @@ func (h *AutopilotHandler) Today(w http.ResponseWriter, r *http.Request) {
 			CourseName:        courseName,
 			ExamDate:          "TBD",
 			DaysUntil:         0,
-			Status:            "on_track",
-			WeeklyHoursBudget: 8,
+			Status:            contractStatus,
+			WeeklyHoursBudget: weeklyBudget,
 			HoursDone:         studyHours,
 			Readiness:         readiness,
 		},
