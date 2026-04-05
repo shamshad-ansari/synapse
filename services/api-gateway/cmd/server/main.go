@@ -16,8 +16,8 @@ import (
 	"github.com/shamshad-ansari/synapse/services/api-gateway/internal/config"
 	"github.com/shamshad-ansari/synapse/services/api-gateway/internal/repository"
 	"github.com/shamshad-ansari/synapse/services/api-gateway/internal/service"
-	"github.com/shamshad-ansari/synapse/services/api-gateway/internal/transport/http/handlers"
 	router "github.com/shamshad-ansari/synapse/services/api-gateway/internal/transport/http"
+	"github.com/shamshad-ansari/synapse/services/api-gateway/internal/transport/http/handlers"
 )
 
 func main() {
@@ -91,7 +91,19 @@ func main() {
 	}
 	aiHandler := &handlers.AIHandler{AIService: aiSvc}
 
-	r := router.NewRouter(&cfg, pool, logger, authSvc, learningH, autopilot, aiHandler)
+	plannerRepo := &repository.PlannerRepo{DB: pool}
+	plannerSvc := service.NewPlannerService(plannerRepo)
+	plannerH := &handlers.PlannerHandler{Service: plannerSvc}
+
+	tutoringRepo := repository.NewPostgresTutoringRepo(pool)
+	tutoringSvc := service.NewTutoringService(tutoringRepo)
+	tutoringH := &handlers.TutoringHandler{Service: tutoringSvc}
+
+	feedRepo := repository.NewFeedRepo(pool)
+	feedSvc := service.NewFeedService(feedRepo)
+	feedH := &handlers.FeedHandler{Service: feedSvc}
+
+	r := router.NewRouter(&cfg, pool, logger, authSvc, learningH, autopilot, aiHandler, plannerH, tutoringH, feedH)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.HTTPPort,

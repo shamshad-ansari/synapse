@@ -14,7 +14,7 @@ import (
 )
 
 // NewRouter wires the chi router with all middlewares and routes.
-func NewRouter(cfg *config.Config, db *pgxpool.Pool, logger *zap.Logger, authSvc service.AuthService, learning *handlers.LearningHandler, autopilot *handlers.AutopilotHandler, aiHandler *handlers.AIHandler) *chi.Mux {
+func NewRouter(cfg *config.Config, db *pgxpool.Pool, logger *zap.Logger, authSvc service.AuthService, learning *handlers.LearningHandler, autopilot *handlers.AutopilotHandler, aiHandler *handlers.AIHandler, planner *handlers.PlannerHandler, tutoring *handlers.TutoringHandler, feed *handlers.FeedHandler) *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger(logger))
@@ -63,6 +63,36 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool, logger *zap.Logger, authSvc
 			protected.Get("/insights/confusion", learning.GetConfusionInsights)
 			protected.Post("/flashcards/generate", aiHandler.GenerateFlashcards)
 			protected.Post("/flashcards/generate/accept", aiHandler.AcceptGeneratedFlashcards)
+
+			protected.Route("/planner", func(pr chi.Router) {
+				pr.Get("/sessions", planner.ListSessions)
+				pr.Post("/sessions", planner.CreateSession)
+				pr.Patch("/sessions/{id}/status", planner.UpdateSessionStatus)
+				pr.Delete("/sessions/{id}", planner.DeleteSession)
+				pr.Post("/missed-yesterday", planner.MarkMissed)
+				pr.Get("/deadlines", planner.ListDeadlines)
+				pr.Post("/deadlines", planner.CreateDeadline)
+				pr.Delete("/deadlines/{id}", planner.DeleteDeadline)
+				pr.Post("/regenerate", planner.RegeneratePlan)
+			})
+
+			protected.Route("/tutoring", func(tr chi.Router) {
+				tr.Get("/teaching-topics", tutoring.ListTeachingTopics)
+				tr.Get("/requests/incoming", tutoring.ListIncomingRequests)
+				tr.Get("/requests/outgoing", tutoring.ListOutgoingRequests)
+				tr.Post("/requests", tutoring.CreateRequest)
+				tr.Patch("/requests/{id}", tutoring.UpdateRequestStatus)
+				tr.Get("/match", tutoring.FindTutorMatches)
+			})
+
+			protected.Route("/feed", func(fr chi.Router) {
+				fr.Get("/", feed.ListFeedPosts)
+				fr.Post("/", feed.CreateFeedPost)
+				fr.Get("/{postId}/comments", feed.ListFeedComments)
+				fr.Post("/{postId}/comments", feed.CreateFeedComment)
+				fr.Delete("/{postId}", feed.DeleteFeedPost)
+				fr.Post("/{postId}/upvote", feed.ToggleFeedUpvote)
+			})
 		})
 	})
 
