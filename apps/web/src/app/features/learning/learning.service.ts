@@ -266,7 +266,9 @@ export class LearningService {
   }
 
   async loadCourses(): Promise<void> {
-    this.loading.set(true);
+    if (this.courses().length === 0) {
+      this.loading.set(true);
+    }
     this.error.set(null);
     try {
       const res = await firstValueFrom(
@@ -278,7 +280,8 @@ export class LearningService {
     } catch (err: unknown) {
       const e = err as { error?: { error?: string }; message?: string };
       this.error.set(e?.error?.error ?? e?.message ?? 'Failed to load courses');
-      this.courses.set([]);
+      // Only clear courses if we actually got an error on the first load, 
+      // or keep the stale list. Letting it keep current state is generally safer.
     } finally {
       this.loading.set(false);
     }
@@ -317,6 +320,25 @@ export class LearningService {
       const e = err as { error?: { error?: string }; message?: string };
       this.error.set(e?.error?.error ?? e?.message ?? 'Failed to load topics');
       this.topics.set([]);
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  async createTopic(courseId: string, name: string): Promise<Topic> {
+    this.loading.set(true);
+    this.error.set(null);
+    try {
+      const res = await firstValueFrom(
+        this.http.post<{ data: unknown }>(`${this.apiUrl}/v1/courses/${courseId}/topics`, { name })
+      );
+      const newTopic = normalizeTopic(asRecord(res.data));
+      this.topics.update(list => [...list, newTopic]);
+      return newTopic;
+    } catch (err: unknown) {
+      const e = err as { error?: { error?: string }; message?: string };
+      this.error.set(e?.error?.error ?? e?.message ?? 'Failed to create topic');
+      throw err;
     } finally {
       this.loading.set(false);
     }
@@ -462,7 +484,10 @@ export class LearningService {
   }
 
   async loadNotes(courseId: string): Promise<void> {
-    this.notesLoading.set(true);
+    const isNew = this.localNotesByCourse.get(courseId) === undefined;
+    if (isNew) {
+      this.notesLoading.set(true);
+    }
     try {
       const res = await firstValueFrom(
         this.http.get<{ data: unknown }>(`${this.apiUrl}/v1/courses/${courseId}/notes`),

@@ -51,9 +51,16 @@ interface NoteOverviewCard {
           <div class="flex items-center gap-2">
             <button
               class="btn-import flex items-center gap-1.5"
+              (click)="onImportFromCanvas()"
+              [disabled]="importingCanvas()"
+              [style.opacity]="importingCanvas() ? '0.6' : '1'"
               style="font-size: 13px; padding: 8px 16px; border-radius: var(--r-lg); border: 1px solid var(--divider); background: transparent; color: var(--ink-2); font-weight: 600; cursor: pointer;"
             >
-              <lucide-icon name="upload" [size]="15" [strokeWidth]="2" /> Import
+              @if (importingCanvas()) {
+                <lucide-icon name="refresh-cw" [size]="15" [strokeWidth]="2" class="spin-icon" /> Importing...
+              } @else {
+                <lucide-icon name="upload" [size]="15" [strokeWidth]="2" /> Import
+              }
             </button>
             <button
               class="btn-new-note flex items-center gap-1.5"
@@ -192,6 +199,7 @@ interface NoteOverviewCard {
                   @for (topic of learningService.topics(); track topic.id) {
                     <option [value]="topic.id">{{ topic.name }}</option>
                   }
+                  <option value="__NEW__">+ Create new topic...</option>
                 </select>
                 <div style="flex: 1;"></div>
                 <button
@@ -310,11 +318,7 @@ interface NoteOverviewCard {
                       </div>
                       <div class="flex gap-2">
                         <button class="btn-generate" style="font-size: 12px; font-weight: 700; padding: 8px 14px; border-radius: var(--r-lg); border: 1px solid var(--divider); background: transparent; color: var(--ink-2); cursor: pointer; font-family: var(--font-display);" (click)="onGenerateForNote(box.note, $event)">Generate Cards</button>
-                        @if (box.confusion) {
-                          <button class="btn-confusing" style="font-size: 12px; font-weight: 700; padding: 8px 14px; border-radius: var(--r-lg); border: none; background: var(--navy); color: #fff; cursor: pointer; font-family: var(--font-display);">Mark Confusing</button>
-                        } @else {
-                          <button class="btn-review" style="font-size: 12px; font-weight: 700; padding: 8px 14px; border-radius: var(--r-lg); border: none; background: var(--navy); color: #fff; cursor: pointer; font-family: var(--font-display);" (click)="navigateToReview($event)">Start Review</button>
-                        }
+                        <button class="btn-review" style="font-size: 12px; font-weight: 700; padding: 8px 14px; border-radius: var(--r-lg); border: none; background: var(--navy); color: #fff; cursor: pointer; font-family: var(--font-display);" (click)="navigateToReview($event)">Start Review</button>
                       </div>
                     </div>
                     @if (generatedForNoteId() === box.note.id && learningService.generatedCards().length > 0) {
@@ -546,6 +550,7 @@ export default class NotesTabComponent implements OnInit, OnDestroy {
   readonly aiQuestion = signal('');
   readonly saveStatus = signal('');
   readonly generatedForNoteId = signal<string | null>(null);
+  readonly importingCanvas = signal(false);
 
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -602,13 +607,19 @@ export default class NotesTabComponent implements OnInit, OnDestroy {
 
     effect(() => {
       const rows = this.displayCourses();
-      const cur = this.expandedCourse();
-      if (rows.length && !rows.some((r) => r.id === cur)) {
-        const first = rows[0].id;
-        this.expandedCourse.set(first);
-        this.selectedCourseId.set(first);
-        void this.learningService.loadNotes(first);
-        void this.learningService.loadTopics(first);
+      const curSelected = this.selectedCourseId();
+      
+      if (rows.length) {
+        if (!curSelected || !rows.some(r => r.id === curSelected)) {
+          const first = rows[0].id;
+          this.expandedCourse.set(first);
+          this.selectedCourseId.set(first);
+          void this.learningService.loadNotes(first);
+          void this.learningService.loadTopics(first);
+        }
+      } else if (!rows.length && curSelected) {
+        this.expandedCourse.set('');
+        this.selectedCourseId.set(null);
       }
     });
   }
@@ -623,14 +634,40 @@ export default class NotesTabComponent implements OnInit, OnDestroy {
     }
   }
 
+  async onImportFromCanvas(): Promise<void> {
+    if (this.importingCanvas()) return;
+    this.importingCanvas.set(true);
+    try {
+      await this.canvasService.triggerSync();
+      const synced = await this.canvasService.listSyncedCourses();
+      if (synced.length) {
+        await this.learningService.importFromLMS(
+          synced.map((c) => ({
+            lms_course_id: c.lms_course_id,
+            name: c.course_name,
+            term: c.term,
+          }))
+        );
+        await this.learningService.loadCourses();
+      }
+    } catch {
+      // Best-effort sync
+    } finally {
+      this.importingCanvas.set(false);
+    }
+  }
+
   toggleCourse(id: string): void {
     const isExpanding = this.expandedCourse() !== id;
     this.selectedCourseId.set(id);
     this.expandedCourse.set(isExpanding ? id : '');
+    
+    // Always clear the active note when clicking the course to return to the overview
+    this.learningService.activeNote.set(null);
+
     if (isExpanding) {
       void this.learningService.loadNotes(id);
       void this.learningService.loadTopics(id);
-      this.learningService.activeNote.set(null);
     }
   }
 
@@ -691,8 +728,28 @@ export default class NotesTabComponent implements OnInit, OnDestroy {
     this.aiQuestion.set((ev.target as HTMLInputElement).value);
   }
 
-  onTopicChange(ev: Event): void {
+  async onTopicChange(ev: Event): Promise<void> {
     const raw = (ev.target as HTMLSelectElement).value;
+    if (raw === '__NEW__') {
+      const topicName = window.prompt('Enter new topic name:');
+      if (topicName && topicName.trim()) {
+        const courseId = this.selectedCourseId();
+        if (courseId) {
+          try {
+            const newTopic = await this.learningService.createTopic(courseId, topicName.trim());
+            this.selectedTopicId.set(newTopic.id);
+            this.scheduleSave();
+            return;
+          } catch (e) {
+            console.error('Failed to create topic', e);
+          }
+        }
+      }
+      // Revert if cancelled or failed
+      (ev.target as HTMLSelectElement).value = this.selectedTopicId() ?? '';
+      return;
+    }
+
     this.selectedTopicId.set(raw || null);
     this.scheduleSave();
   }
@@ -736,34 +793,8 @@ export default class NotesTabComponent implements OnInit, OnDestroy {
   }
 
   private async initializeNotesData(): Promise<void> {
+    // Load courses from Synapse DB only.
+    // Canvas sync + import is triggered explicitly via the Import button.
     await this.learningService.loadCourses();
-    await this.canvasService.loadStatus();
-
-    if (this.learningService.courses().length > 0 || !this.canvasService.status()) {
-      return;
-    }
-
-    try {
-      await this.canvasService.triggerSync();
-    } catch {
-      // Best-effort sync; continue with any already-synced LMS rows.
-    }
-
-    try {
-      const synced = await this.canvasService.listSyncedCourses();
-      if (!synced.length) {
-        return;
-      }
-      await this.learningService.importFromLMS(
-        synced.map((c) => ({
-          lms_course_id: c.lms_course_id,
-          name: c.course_name,
-          term: c.term,
-        })),
-      );
-      await this.learningService.loadCourses();
-    } catch {
-      // Leave the UI in place; user can still use fallback notes behavior.
-    }
   }
 }
